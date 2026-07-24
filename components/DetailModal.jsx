@@ -14,18 +14,50 @@ export default function DetailModal({
 }) {
   if (!selectedItem) return null;
 
+  const ds = selectedItem.recipe?.designSystem || {};
+  const colors = ds.color || {};
+  const typography = ds.typography || {};
+  const fx = selectedItem.recipe?.visualEffects || {};
+
   return (
     <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative flex flex-col md:flex-row shadow-2xl">
         
         <button onClick={() => setSelectedItem(null)} className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-slate-200 w-8 h-8 rounded-full flex items-center justify-center transition z-10 font-mono text-sm">✕</button>
 
-        <div className="w-full md:w-1/2 p-6 border-b md:border-b-0 md:border-r border-slate-800">
-          <img src={selectedItem.imageUrl} alt={selectedItem.creativeName} className="w-full h-auto rounded-xl border border-slate-800 bg-slate-950 object-cover shadow-lg" />
-          <div className="mt-4 flex flex-wrap gap-2">
-            {selectedItem.baseTags.map(t => (
-              <span key={t} className="text-xs bg-indigo-950/80 border border-indigo-800/50 text-indigo-300 px-2.5 py-0.5 rounded-md font-mono">{t}</span>
-            ))}
+        <div className="w-full md:w-1/2 p-6 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col justify-between">
+          <div>
+            <img src={selectedItem.imageUrl} alt={selectedItem.creativeName} className="w-full h-auto rounded-xl border border-slate-800 bg-slate-950 object-cover shadow-lg" />
+            <div className="mt-4 flex flex-wrap gap-2">
+              {selectedItem.baseTags.map(t => (
+                <span key={t} className="text-xs bg-indigo-950/80 border border-indigo-800/50 text-indigo-300 px-2.5 py-0.5 rounded-md font-mono">{t}</span>
+              ))}
+            </div>
+
+            {/* Color Swatches */}
+            {colors.primary && (
+              <div className="mt-6 p-4 bg-slate-950 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wider block mb-2">Design System Palette Swatches</span>
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="flex flex-col items-center">
+                    <div className="w-full h-8 rounded-md border border-slate-800 shadow-inner" style={{ backgroundColor: colors.surface || '#0f172a' }}></div>
+                    <span className="text-[9px] text-slate-400 font-mono mt-1">Surface</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-full h-8 rounded-md border border-slate-800 shadow-inner" style={{ backgroundColor: colors.card || '#1e293b' }}></div>
+                    <span className="text-[9px] text-slate-400 font-mono mt-1">Card</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-full h-8 rounded-md border border-slate-800 shadow-inner" style={{ backgroundColor: colors.primary || '#ffffff' }}></div>
+                    <span className="text-[9px] text-slate-400 font-mono mt-1">Primary</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-full h-8 rounded-md border border-slate-800 shadow-inner" style={{ backgroundColor: colors.accent || '#6366f1' }}></div>
+                    <span className="text-[9px] text-slate-400 font-mono mt-1">Accent</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -34,6 +66,15 @@ export default function DetailModal({
             <span className="text-xs text-slate-400 font-mono tracking-widest uppercase">Creative Identity</span>
             <h2 className="text-xl font-bold text-white mt-1 font-display">{selectedItem.creativeName}</h2>
             <p className="text-xs text-slate-300 mt-4 bg-slate-950 p-4 rounded-xl border border-slate-800/80 leading-relaxed">{selectedItem.summary}</p>
+
+            {/* Measurable Specs */}
+            {typography.headingFont && (
+              <div className="mt-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800/60 text-xs font-mono space-y-1 text-slate-300">
+                <div><span className="text-indigo-400">Heading Font:</span> {typography.headingFont}</div>
+                <div><span className="text-indigo-400">Body Font:</span> {typography.bodyFont}</div>
+                <div><span className="text-indigo-400">Effects & Texture:</span> {fx.textureField?.type || 'Standard'} {fx.glassmorphism?.enabled ? '(Glassmorphic)' : ''}</div>
+              </div>
+            )}
 
             <p className="text-xs text-slate-400 font-mono uppercase tracking-wider mt-6">Aesthetic DNA Tokens</p>
             <div className="flex flex-wrap gap-2 mt-2">

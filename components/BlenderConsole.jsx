@@ -13,6 +13,9 @@ export default function BlenderConsole({
   const itemA = library.find(i => i.id === blendSlotA);
   const itemB = library.find(i => i.id === blendSlotB);
 
+  const colors = blendedResult?.recipe?.designSystem?.color || {};
+  const typography = blendedResult?.recipe?.designSystem?.typography || {};
+
   return (
     <footer className="bg-slate-950/90 border-t border-slate-800/80 p-6 glass-panel sticky bottom-0 z-30">
       <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6">
@@ -42,15 +45,30 @@ export default function BlenderConsole({
 
       {blendedResult && (
         <div className="max-w-7xl mx-auto mt-6 p-6 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl">
-          <h4 className="text-xs font-mono uppercase text-indigo-300">Blended Result: {blendedResult.creativeName}</h4>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800 pb-3 gap-2">
+            <h4 className="text-xs font-mono uppercase text-indigo-300">Blended Hybrid DNA: {blendedResult.creativeName}</h4>
+            {colors.primary && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-slate-400">Synthesized Palette:</span>
+                <div className="w-5 h-5 rounded-md border border-slate-700 shadow" style={{ backgroundColor: colors.surface }} title={`Surface: ${colors.surface}`}></div>
+                <div className="w-5 h-5 rounded-md border border-slate-700 shadow" style={{ backgroundColor: colors.card }} title={`Card: ${colors.card}`}></div>
+                <div className="w-5 h-5 rounded-md border border-slate-700 shadow" style={{ backgroundColor: colors.primary }} title={`Primary: ${colors.primary}`}></div>
+                <div className="w-5 h-5 rounded-md border border-slate-700 shadow" style={{ backgroundColor: colors.accent }} title={`Accent: ${colors.accent}`}></div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-xs">
             <div>
               <p className="text-xs text-slate-400 font-mono">Blended Rules</p>
               <ul className="list-disc pl-4 mt-2 space-y-1 text-slate-300">{blendedResult.recipe.alwaysRules.map((r, i) => <li key={i}>{r}</li>)}</ul>
             </div>
             <div>
-              <p className="text-xs text-slate-400 font-mono">Blended Bans</p>
-              <ul className="list-disc pl-4 mt-2 space-y-1 text-slate-300">{blendedResult.recipe.neverRules.map((r, i) => <li key={i}>{r}</li>)}</ul>
+              <p className="text-xs text-slate-400 font-mono">Blended Bans & System Specs</p>
+              <ul className="list-disc pl-4 mt-2 space-y-1 text-slate-300">
+                {blendedResult.recipe.neverRules.map((r, i) => <li key={i}>{r}</li>)}
+                {typography.headingFont && <li className="text-indigo-300 font-mono mt-2">Hybrid Fonts: {typography.headingFont} + {typography.bodyFont}</li>}
+              </ul>
             </div>
           </div>
         </div>

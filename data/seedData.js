@@ -22,7 +22,36 @@ export const INITIAL_LIBRARY = [
         'No purple or blue gradient backgrounds.',
         'No glossy 3D blobs, untextured stock photos, or friendly rounded vectors.',
         'No standard feature grid rows or generic system typography.'
-      ]
+      ],
+      designSystem: {
+        color: {
+          primary: '#2B382D',
+          secondary: '#5A6B5C',
+          accent: '#1B241C',
+          surface: '#D1DCD2',
+          card: '#C3D0C4',
+          neutralText: '#2B382D'
+        },
+        typography: {
+          headingFont: 'Grotesk Display',
+          bodyFont: 'JetBrains Mono',
+          scaleRatio: '1.33',
+          letterSpacing: 'wide-mono'
+        },
+        spacing: {
+          baseUnit: '8px',
+          density: 'spacious'
+        },
+        shape: {
+          borderRadius: '2px',
+          borderStyle: '1px solid #A4B5A6'
+        }
+      },
+      visualEffects: {
+        glassmorphism: { enabled: false, blurRadius: '0px', transparency: '1.0' },
+        textureField: { enabled: true, type: 'topographic-lines' },
+        renderingTier: 'lightweight'
+      }
     }
   },
   {
@@ -48,7 +77,36 @@ export const INITIAL_LIBRARY = [
         'No soft dropshadows, colorful gradients, or friendly cartoon graphics.',
         'No center-aligned conversational body paragraphs.',
         'No soft pastel backgrounds or rounded buttons.'
-      ]
+      ],
+      designSystem: {
+        color: {
+          primary: '#FFFFFF',
+          secondary: '#888888',
+          accent: '#00FF66',
+          surface: '#0A0A0A',
+          card: '#141414',
+          neutralText: '#E0E0E0'
+        },
+        typography: {
+          headingFont: 'Outfit Bold / Monumental Sans',
+          bodyFont: 'Inter / System Mono',
+          scaleRatio: '1.414',
+          letterSpacing: 'tight'
+        },
+        spacing: {
+          baseUnit: '12px',
+          density: 'compact'
+        },
+        shape: {
+          borderRadius: '0px',
+          borderStyle: '1px solid #222222'
+        }
+      },
+      visualEffects: {
+        glassmorphism: { enabled: false, blurRadius: '0px', transparency: '1.0' },
+        textureField: { enabled: true, type: '1-bit dither' },
+        renderingTier: 'medium'
+      }
     }
   }
 ];
@@ -85,42 +143,79 @@ export const fileToBase64 = (file) => new Promise((resolve, reject) => {
 });
 
 export const compileStitchPrompt = (item, subject) => {
+  const ds = item.recipe?.designSystem || {};
+  const colors = ds.color || {};
+  const typo = ds.typography || {};
+  const spacing = ds.spacing || {};
+  const shape = ds.shape || {};
+  const fx = item.recipe?.visualEffects || {};
+
   return `Build a landing page for: "${subject}"
 
-Refer to the structural, aesthetic, and layout rules defined in the DESIGN.md block below to generate the layout components, spacing, typography scale, color rules, and system behavior. Do not use generic system palettes, untextured styling, or rounded-everything elements.
+Refer to the structural, aesthetic, color tokens, and layout constraints defined in the DESIGN.md block below to generate the page.
 
 --- START DESIGN.md CONSTRAINTS ---
 
 # Aesthetic Profile: ${item.recipe.aestheticFamily} - ${item.recipe.vocabularyTerms.join(', ')}
 
-## Visual Feel
-${item.recipe.feel}
+## 1. CSS Design Tokens (:root)
+\`\`\`css
+:root {
+  --color-primary: ${colors.primary || '#ffffff'};
+  --color-secondary: ${colors.secondary || '#888888'};
+  --color-accent: ${colors.accent || '#6366f1'};
+  --color-surface: ${colors.surface || '#0f172a'};
+  --color-card: ${colors.card || '#1e293b'};
+  --color-text: ${colors.neutralText || '#f8fafc'};
+  --font-heading: "${typo.headingFont || 'Outfit, sans-serif'}";
+  --font-body: "${typo.bodyFont || 'Inter, sans-serif'}";
+  --spacing-base: ${spacing.baseUnit || '8px'};
+  --radius-container: ${shape.borderRadius || '8px'};
+  --border-style: ${shape.borderStyle || '1px solid rgba(255,255,255,0.1)'};
+}
+\`\`\`
 
-## Intent
-${item.recipe.intent}
+## 2. Visual Feel & Intent
+- Sensory Feel: ${item.recipe.feel}
+- Perceived Intent: ${item.recipe.intent}
 
-## Design Rules (Always)
+## 3. Measurable Design System Specs
+- Typographic Scale Ratio: ${typo.scaleRatio || '1.25'} (${typo.letterSpacing || 'normal'} tracking)
+- Layout Density: ${spacing.density || 'comfortable'}
+- Visual Texture / Effects: ${fx.textureField?.type || 'none'} (Glassmorphism: ${fx.glassmorphism?.enabled ? `blur ${fx.glassmorphism.blurRadius}` : 'disabled'})
+
+## 4. Design Rules (Always)
 ${item.recipe.alwaysRules.map(rule => `- ${rule}`).join('\n')}
 
-## Exclusions (Never)
+## 5. Exclusions (Never)
 ${item.recipe.neverRules.map(rule => `- ${rule}`).join('\n')}
 
 --- END DESIGN.md CONSTRAINTS ---`;
 };
 
 export const compileBrief = (item) => {
+  const ds = item.recipe?.designSystem || {};
+  const colors = ds.color || {};
+  const typo = ds.typography || {};
+
   return `# Creative Brief: ${item.creativeName}
     
 ## Visual Overview
 ${item.summary}
 
-## Aesthetic Profile
+## Aesthetic DNA Tokens
 Family: ${item.recipe.aestheticFamily}
-Key Tokens: ${item.tokens.join(', ')}
+Tokens: ${item.tokens.join(', ')}
+
+## Design System Tokens
+- Surface Background: ${colors.surface || 'N/A'}
+- Primary Swatch: ${colors.primary || 'N/A'}
+- Accent CTA: ${colors.accent || 'N/A'}
+- Typographic Family: ${typo.headingFont || 'N/A'} / ${typo.bodyFont || 'N/A'}
 
 ## Strategic Alignment
-Intent: ${item.recipe.intent}
-Mood & Feel: ${item.recipe.feel}
+- Intent: ${item.recipe.intent}
+- Mood & Sensory Feel: ${item.recipe.feel}
 `;
 };
 

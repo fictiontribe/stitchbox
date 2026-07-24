@@ -136,9 +136,9 @@ export default function Home() {
   }, [library, activeBaseTag, activeSubTag]);
 
   const runDnaExtraction = async (rawBase64, mimeType) => {
-    const systemPrompt = `You are the design intelligence engine for StitchBox. Analyze the uploaded website screenshot and extract its design DNA into a clean JSON object. 
+    const systemPrompt = `You are the design intelligence engine for StitchBox. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.
 
-Deconstruct the design into structural, typographic, color, and functional patterns, avoiding generic marketing terms in favor of precise, conventional UX, typography, and design vocabulary.
+Sample exact color hex values by area dominance, identify specific font classifications, measure layout density and border radius, and detect special visual effects.
 
 Generate the output matching this exact JSON schema:
 {
@@ -152,7 +152,43 @@ Generate the output matching this exact JSON schema:
     "feel": "The raw sensory feel of the reference design",
     "intent": "The visual purpose or perceived strategic goal of the layout",
     "alwaysRules": ["3-5 concrete layout, color, typography, or styling rules that must always be present to recreate this aesthetic"],
-    "neverRules": ["3-5 concrete styling choices, layout patterns, or color treatments to strictly avoid"]
+    "neverRules": ["3-5 concrete styling choices, layout patterns, or color treatments to strictly avoid"],
+    "designSystem": {
+      "color": {
+        "primary": "#hex for main brand/headline color",
+        "secondary": "#hex for secondary elements/borders",
+        "accent": "#hex for primary call-to-action button or highlight",
+        "surface": "#hex for overall page background",
+        "card": "#hex for card or container background",
+        "neutralText": "#hex for main body typography"
+      },
+      "typography": {
+        "headingFont": "Specific font style or classification (e.g., 'Grotesk Display', 'Geometric Sans', 'Serif')",
+        "bodyFont": "Specific body font family (e.g., 'Inter', 'JetBrains Mono', 'System Sans')",
+        "scaleRatio": "Typographic scale ratio e.g. '1.25' or '1.33'",
+        "letterSpacing": "Tracking style e.g. 'tight', 'normal', 'wide-mono'"
+      },
+      "spacing": {
+        "baseUnit": "Base grid spacing unit e.g. '4px', '8px', '12px'",
+        "density": "'compact', 'comfortable', or 'spacious'"
+      },
+      "shape": {
+        "borderRadius": "Main container border radius e.g. '0px', '4px', '12px', '9999px'",
+        "borderStyle": "Border treatment e.g. '1px solid rgba(255,255,255,0.1)', '2px solid #000', 'none'"
+      }
+    },
+    "visualEffects": {
+      "glassmorphism": {
+        "enabled": true or false,
+        "blurRadius": "Blur amount e.g. '12px' or '0px'",
+        "transparency": "Surface transparency e.g. '0.85' or '1.0'"
+      },
+      "textureField": {
+        "enabled": true or false,
+        "type": "'1-bit dither', 'halftone', 'topographic-lines', 'noise-grain', 'gradient-mesh', 'none'"
+      },
+      "renderingTier": "'lightweight', 'medium', or 'heavy'"
+    }
   }
 }`;
 
@@ -238,7 +274,18 @@ Generate the output matching this exact JSON schema:
               feel: 'Basic structural visualization.',
               intent: 'Educational layout representation without active AI interpretation.',
               alwaysRules: ['Maintain flat monochrome structural shapes.', 'Align text labels directly against coordinate markers.'],
-              neverRules: ['No complex graphic illustrations.', 'No color gradients.']
+              neverRules: ['No complex graphic illustrations.', 'No color gradients.'],
+              designSystem: {
+                color: { primary: '#FFFFFF', secondary: '#888888', accent: '#6366F1', surface: '#0F172A', card: '#1E293B', neutralText: '#F8FAFC' },
+                typography: { headingFont: 'Inter Bold', bodyFont: 'Inter', scaleRatio: '1.25', letterSpacing: 'normal' },
+                spacing: { baseUnit: '8px', density: 'comfortable' },
+                shape: { borderRadius: '8px', borderStyle: '1px solid rgba(255,255,255,0.1)' }
+              },
+              visualEffects: {
+                glassmorphism: { enabled: false, blurRadius: '0px', transparency: '1.0' },
+                textureField: { enabled: false, type: 'none' },
+                renderingTier: 'lightweight'
+              }
             }
           };
           setLibrary(prev => [fallbackItem, ...prev]);
@@ -310,7 +357,18 @@ Generate the output matching this exact JSON schema:
             feel: 'Direct site capture visualization.',
             intent: `Represent design layout of ${title} without active AI interpretation.`,
             alwaysRules: ['Maintain exact visual layout captured from source site.', 'Extract dominant color palettes.'],
-            neverRules: ['No synthetic stock images.', 'No distorted aspect ratios.']
+            neverRules: ['No synthetic stock images.', 'No distorted aspect ratios.'],
+            designSystem: {
+              color: { primary: '#FFFFFF', secondary: '#888888', accent: '#6366F1', surface: '#0F172A', card: '#1E293B', neutralText: '#F8FAFC' },
+              typography: { headingFont: 'Outfit', bodyFont: 'Inter', scaleRatio: '1.25', letterSpacing: 'normal' },
+              spacing: { baseUnit: '8px', density: 'comfortable' },
+              shape: { borderRadius: '8px', borderStyle: '1px solid rgba(255,255,255,0.1)' }
+            },
+            visualEffects: {
+              glassmorphism: { enabled: false, blurRadius: '0px', transparency: '1.0' },
+              textureField: { enabled: false, type: 'none' },
+              renderingTier: 'lightweight'
+            }
           }
         };
         setLibrary(prev => [fallbackItem, ...prev]);
@@ -369,11 +427,56 @@ Generate the output matching this exact JSON schema:
     const b = library.find(item => item.id === blendSlotB);
     if (!a || !b) return;
 
-    const hybridFamily = `${a.recipe.aestheticFamily} x ${b.recipe.aestheticFamily}`;
+    const dsA = a.recipe?.designSystem || {};
+    const dsB = b.recipe?.designSystem || {};
+    const colA = dsA.color || {};
+    const colB = dsB.color || {};
+    const typA = dsA.typography || {};
+    const typB = dsB.typography || {};
+
+    const hybridFamily = `${a.recipe.aestheticFamily} × ${b.recipe.aestheticFamily}`;
     const combinedTerms = [...new Set([...a.recipe.vocabularyTerms, ...b.recipe.vocabularyTerms])].slice(0, 7);
     const combinedFeel = `${a.recipe.feel} colliding with ${b.recipe.feel}`;
     const combinedAlways = [...a.recipe.alwaysRules.slice(0, 2), ...b.recipe.alwaysRules.slice(0, 2)];
     const combinedNever = [...a.recipe.neverRules.slice(0, 2), ...b.recipe.neverRules.slice(0, 2)];
+
+    const blendedDesignSystem = {
+      color: {
+        primary: colA.primary || '#ffffff',
+        secondary: colB.secondary || colA.secondary || '#888888',
+        accent: colB.accent || colA.accent || '#6366f1',
+        surface: colA.surface || '#0f172a',
+        card: colB.card || colA.card || '#1e293b',
+        neutralText: colA.neutralText || '#f8fafc'
+      },
+      typography: {
+        headingFont: `${typA.headingFont || 'Display'} / ${typB.headingFont || 'Sans'}`,
+        bodyFont: typB.bodyFont || typA.bodyFont || 'Inter',
+        scaleRatio: '1.33',
+        letterSpacing: typA.letterSpacing || 'normal'
+      },
+      spacing: {
+        baseUnit: dsA.spacing?.baseUnit || '8px',
+        density: 'comfortable'
+      },
+      shape: {
+        borderRadius: dsB.shape?.borderRadius || dsA.shape?.borderRadius || '4px',
+        borderStyle: dsA.shape?.borderStyle || '1px solid rgba(255,255,255,0.1)'
+      }
+    };
+
+    const blendedVisualEffects = {
+      glassmorphism: {
+        enabled: a.recipe?.visualEffects?.glassmorphism?.enabled || b.recipe?.visualEffects?.glassmorphism?.enabled || false,
+        blurRadius: '12px',
+        transparency: '0.85'
+      },
+      textureField: {
+        enabled: true,
+        type: `${a.recipe?.visualEffects?.textureField?.type || 'none'} + ${b.recipe?.visualEffects?.textureField?.type || 'none'}`
+      },
+      renderingTier: 'medium'
+    };
 
     setBlendedResult({
       creativeName: `${a.creativeName} × ${b.creativeName}`,
@@ -381,9 +484,11 @@ Generate the output matching this exact JSON schema:
         aestheticFamily: hybridFamily,
         vocabularyTerms: combinedTerms,
         feel: combinedFeel,
-        intent: `Synthesized design layout blending the intent of both reference frames.`,
+        intent: `Synthesized multi-dimensional design layout blending color swatches, typography, and visual rules of both frames.`,
         alwaysRules: combinedAlways,
-        neverRules: combinedNever
+        neverRules: combinedNever,
+        designSystem: blendedDesignSystem,
+        visualEffects: blendedVisualEffects
       }
     });
   };
