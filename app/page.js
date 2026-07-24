@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -9,24 +11,24 @@ import {
   compileBrief,
   fetchUrlScreenshot,
   imageUrlToBase64
-} from './data/seedData';
+} from '../data/seedData';
 
 import {
   getAllLibraryItems,
   saveLibraryItem,
   getCustomBaseTags,
   saveCustomBaseTag
-} from './data/dbStorage';
+} from '../data/dbStorage';
 
-import Header from './components/Header';
-import NoticeBanners from './components/NoticeBanners';
-import DailySpark from './components/DailySpark';
-import TagFilterBar from './components/TagFilterBar';
-import DashboardGrid from './components/DashboardGrid';
-import BlenderConsole from './components/BlenderConsole';
-import DetailModal from './components/DetailModal';
+import Header from '../components/Header';
+import NoticeBanners from '../components/NoticeBanners';
+import DailySpark from '../components/DailySpark';
+import TagFilterBar from '../components/TagFilterBar';
+import DashboardGrid from '../components/DashboardGrid';
+import BlenderConsole from '../components/BlenderConsole';
+import DetailModal from '../components/DetailModal';
 
-export default function App() {
+export default function Home() {
   const [library, setLibrary] = useState(INITIAL_LIBRARY);
   const [customTags, setCustomTags] = useState([]);
   const [activeBaseTag, setActiveBaseTag] = useState(null);
@@ -41,51 +43,57 @@ export default function App() {
   const [urlInput, setUrlInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [apiError, setApiError] = useState(null);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
-  const [isKeySaved, setIsKeySaved] = useState(!!localStorage.getItem('GEMINI_API_KEY'));
+  const [apiKey, setApiKey] = useState('');
+  const [isKeySaved, setIsKeySaved] = useState(false);
   const [isCloudManaged, setIsCloudManaged] = useState(false);
 
   useEffect(() => {
-    const loadedTags = getCustomBaseTags();
-    setCustomTags(loadedTags);
+    if (typeof window !== 'undefined') {
+      const savedKey = localStorage.getItem('GEMINI_API_KEY') || '';
+      setApiKey(savedKey);
+      setIsKeySaved(!!savedKey);
 
-    const syncDatabase = async () => {
-      try {
-        const storedItems = await getAllLibraryItems();
-        if (storedItems && storedItems.length > 0) {
-          const storedIds = new Set(storedItems.map(i => i.id));
-          const initialRemaining = INITIAL_LIBRARY.filter(i => !storedIds.has(i.id));
-          setLibrary([...storedItems, ...initialRemaining]);
+      const loadedTags = getCustomBaseTags();
+      setCustomTags(loadedTags);
+
+      const syncDatabase = async () => {
+        try {
+          const storedItems = await getAllLibraryItems();
+          if (storedItems && storedItems.length > 0) {
+            const storedIds = new Set(storedItems.map(i => i.id));
+            const initialRemaining = INITIAL_LIBRARY.filter(i => !storedIds.has(i.id));
+            setLibrary([...storedItems, ...initialRemaining]);
+          }
+        } catch (err) {
+          console.error('Failed to load from IndexedDB:', err);
         }
-      } catch (err) {
-        console.error('Failed to load from IndexedDB:', err);
-      }
-    };
-    syncDatabase();
+      };
+      syncDatabase();
 
-    // Check if Cloudflare Pages serverless Function endpoint /api/analyze is active
-    fetch('/api/analyze', { method: 'OPTIONS' })
-      .then(res => {
-        if (res.status !== 404) setIsCloudManaged(true);
-      })
-      .catch(() => setIsCloudManaged(false));
+      // Check if Next.js serverless API route endpoint /api/analyze is reachable
+      fetch('/api/analyze', { method: 'OPTIONS' })
+        .then(res => {
+          if (res.status !== 404) setIsCloudManaged(true);
+        })
+        .catch(() => setIsCloudManaged(false));
+    }
   }, []);
 
   const handleSaveApiKey = (key) => {
     const trimmed = key.trim();
     setApiKey(trimmed);
     if (trimmed) {
-      localStorage.setItem('GEMINI_API_KEY', trimmed);
+      if (typeof window !== 'undefined') localStorage.setItem('GEMINI_API_KEY', trimmed);
       setIsKeySaved(true);
     } else {
-      localStorage.removeItem('GEMINI_API_KEY');
+      if (typeof window !== 'undefined') localStorage.removeItem('GEMINI_API_KEY');
       setIsKeySaved(false);
     }
   };
 
   const handleClearApiKey = () => {
     setApiKey('');
-    localStorage.removeItem('GEMINI_API_KEY');
+    if (typeof window !== 'undefined') localStorage.removeItem('GEMINI_API_KEY');
     setIsKeySaved(false);
   };
 
@@ -127,7 +135,6 @@ export default function App() {
     return list;
   }, [library, activeBaseTag, activeSubTag]);
 
-  // Unified AI extraction handler with client SDK, serverless function, and simulation fallback
   const runDnaExtraction = async (rawBase64, mimeType) => {
     const systemPrompt = `You are the design intelligence engine for StitchBox. Analyze the uploaded website screenshot and extract its design DNA into a clean JSON object. 
 
@@ -149,7 +156,7 @@ Generate the output matching this exact JSON schema:
   }
 }`;
 
-    // 1. Client-Side API Key execution
+    // 1. Client-Side API Key execution if user provided local key
     if (apiKey) {
       try {
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -182,7 +189,7 @@ Generate the output matching this exact JSON schema:
       }
     }
 
-    // 2. Cloudflare Pages Function execution (/api/analyze)
+    // 2. Next.js Serverless Route execution (/api/analyze)
     try {
       const response = await fetch('/api/analyze', {
         method: 'POST',
@@ -195,7 +202,7 @@ Generate the output matching this exact JSON schema:
         if (data.success && data.dna) return data.dna;
       }
     } catch (e) {
-      console.warn("Cloudflare Pages Function /api/analyze not available, using fallback.");
+      console.warn("Next.js Serverless route /api/analyze not available, using fallback.");
     }
 
     // 3. Fallback Simulation Mode
@@ -216,7 +223,6 @@ Generate the output matching this exact JSON schema:
       const parsedDNA = await runDnaExtraction(rawBase64, file.type);
 
       if (!parsedDNA) {
-        // Fallback simulation blueprint
         setTimeout(async () => {
           const fallbackItem = {
             id: String(Date.now()),
@@ -345,14 +351,14 @@ Generate the output matching this exact JSON schema:
 
   const handleCopyPrompt = (item) => {
     const text = compileStitchPrompt(item, customSubject);
-    navigator.clipboard.writeText(text);
+    if (typeof navigator !== 'undefined') navigator.clipboard.writeText(text);
     setCopiedType('prompt');
     setTimeout(() => setCopiedType(null), 2500);
   };
 
   const handleCopyBrief = (item) => {
     const text = compileBrief(item);
-    navigator.clipboard.writeText(text);
+    if (typeof navigator !== 'undefined') navigator.clipboard.writeText(text);
     setCopiedType('brief');
     setTimeout(() => setCopiedType(null), 2500);
   };
@@ -389,7 +395,7 @@ Generate the output matching this exact JSON schema:
   };
 
   return (
-    <div className="min-h-screen bg-[#111315] text-[#ECEFF1] font-sans selection:bg-[#D1DCD2] selection:text-[#111315] flex flex-col justify-between">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col justify-between">
       <div>
         <Header
           apiKey={apiKey}

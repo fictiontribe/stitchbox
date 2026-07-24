@@ -158,4 +158,3 @@ export const imageUrlToBase64 = async (imageUrl) => {
     reader.onerror = error => reject(error);
   });
 };
-

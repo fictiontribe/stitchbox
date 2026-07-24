@@ -1,11 +1,17 @@
 /** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./data/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        display: ['Outfit', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
       animation: {
         fadeIn: 'fadeIn 0.2s ease-out forwards',
       },
@@ -18,4 +24,4 @@ export default {
     },
   },
   plugins: [],
-}
+};

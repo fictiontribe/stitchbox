@@ -1,3 +1,8 @@
+# Next.js build output
+.next/
+out/
+.dev.vars
+
 # Logs
 logs
 *.log
@@ -7,7 +12,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Diagnostic / temp build outputs
+# Dependencies and build outputs
 node_modules
 dist
 dist-ssr

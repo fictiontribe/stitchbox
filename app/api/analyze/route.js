@@ -1,25 +1,19 @@
-export async function onRequestPost(context) {
-  const { request, env } = context;
+export const runtime = 'edge';
 
+export async function POST(request) {
   try {
-    const apiKey = env.VERTEX_API_KEY || env.GEMINI_API_KEY;
+    const apiKey = process.env.VERTEX_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return new Response(JSON.stringify({ 
-        error: "Cloud Managed API Key is not configured on this Cloudflare Pages deployment. Please set VERTEX_API_KEY or GEMINI_API_KEY in Environment Variables." 
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      });
+      return Response.json({ 
+        error: "Cloud Managed API Key is not configured on this Cloudflare deployment. Please set VERTEX_API_KEY or GEMINI_API_KEY in Environment Variables." 
+      }, { status: 500 });
     }
 
     const body = await request.json();
     const { imageBase64, mimeType } = body;
 
     if (!imageBase64) {
-      return new Response(JSON.stringify({ error: "Missing imageBase64 parameter." }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
+      return Response.json({ error: "Missing imageBase64 parameter." }, { status: 400 });
     }
 
     const systemPrompt = `You are the design intelligence engine for StitchBox. Analyze the uploaded website screenshot and extract its design DNA into a clean JSON object. 
@@ -72,32 +66,21 @@ Generate the output matching this exact JSON schema:
 
     if (!response.ok) {
       const errText = await response.text();
-      return new Response(JSON.stringify({ 
+      return Response.json({ 
         error: `Gemini API call failed with status ${response.status}: ${errText}` 
-      }), {
-        status: response.status,
-        headers: { "Content-Type": "application/json" }
-      });
+      }, { status: response.status });
     }
 
     const data = await response.json();
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) {
-      return new Response(JSON.stringify({ error: "Empty response received from AI model." }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      });
+      return Response.json({ error: "Empty response received from AI model." }, { status: 500 });
     }
 
     const parsedDNA = JSON.parse(rawText);
-    return new Response(JSON.stringify({ success: true, dna: parsedDNA }), {
-      headers: { "Content-Type": "application/json" }
-    });
+    return Response.json({ success: true, dna: parsedDNA });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message || "Internal server error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    return Response.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }

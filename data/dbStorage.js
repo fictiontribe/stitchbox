@@ -4,6 +4,9 @@ const STORE_LIBRARY = 'library';
 
 export const initDB = () => {
   return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      return reject(new Error("IndexedDB is not available on SSR"));
+    }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event) => {
@@ -20,6 +23,7 @@ export const initDB = () => {
 
 export const getAllLibraryItems = async () => {
   try {
+    if (typeof window === 'undefined') return [];
     const db = await initDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_LIBRARY, 'readonly');
@@ -36,6 +40,7 @@ export const getAllLibraryItems = async () => {
 
 export const saveLibraryItem = async (item) => {
   try {
+    if (typeof window === 'undefined') return;
     const db = await initDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_LIBRARY, 'readwrite');
@@ -51,6 +56,7 @@ export const saveLibraryItem = async (item) => {
 
 export const deleteLibraryItem = async (id) => {
   try {
+    if (typeof window === 'undefined') return;
     const db = await initDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_LIBRARY, 'readwrite');
@@ -66,6 +72,7 @@ export const deleteLibraryItem = async (id) => {
 
 export const getCustomBaseTags = () => {
   try {
+    if (typeof window === 'undefined') return [];
     const stored = localStorage.getItem('STITCHBOX_CUSTOM_TAGS');
     return stored ? JSON.parse(stored) : [];
   } catch (e) {
@@ -75,6 +82,7 @@ export const getCustomBaseTags = () => {
 
 export const saveCustomBaseTag = (tag) => {
   try {
+    if (typeof window === 'undefined') return [];
     const existing = getCustomBaseTags();
     if (!existing.includes(tag)) {
       const updated = [...existing, tag];
