@@ -1,35 +1,34 @@
-# Next.js build output
-.next/
-out/
-.dev.vars
+# dependencies
+/node_modules
+/.pnp
+.pnpm-debug.log*
+.yarn/
+.npmrc
 
-# Logs
-logs
-*.log
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+/.vercel/
+
+# production
+/build
+
+# debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-# Dependencies and build outputs
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Environment variables
+# local env files
+.env*.local
 .env
-.env.*
-!.env.example
+
+# vercel & cloudflare
+.vercel
+.cloudflare
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
