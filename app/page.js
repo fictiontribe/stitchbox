@@ -192,7 +192,24 @@ Generate the output matching this exact JSON schema:
   }
 }`;
 
-    // 1. Client-Side API Key execution if user provided local key
+    // 1. Next.js Serverless Route execution (/api/analyze) FIRST
+    // Uses persistent GEMINI_API_KEY configured on Cloudflare or server environment
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: rawBase64, mimeType })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.dna) return data.dna;
+      }
+    } catch (e) {
+      console.warn("Next.js Serverless route /api/analyze fetch failed, trying client key fallback.", e);
+    }
+
+    // 2. Client-Side API Key execution if user provided custom override key in UI header
     if (apiKey) {
       try {
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -223,22 +240,6 @@ Generate the output matching this exact JSON schema:
         
         throw { title, message: msg, suggestion };
       }
-    }
-
-    // 2. Next.js Serverless Route execution (/api/analyze)
-    try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: rawBase64, mimeType })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.dna) return data.dna;
-      }
-    } catch (e) {
-      console.warn("Next.js Serverless route /api/analyze not available, using fallback.");
     }
 
     // 3. Fallback Simulation Mode
