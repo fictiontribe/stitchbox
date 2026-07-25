@@ -17,7 +17,7 @@ export default function DashboardGrid({
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-950/80 rounded-lg border border-indigo-800/50"></div>
             <div>
-              <p className="text-xs sm:text-sm font-semibold text-indigo-200">Analyzing Visual Assets with Gemini 2.0 Flash...</p>
+              <p className="text-xs sm:text-sm font-semibold text-indigo-200">Analyzing Visual Assets with Gemini 2.5 Flash-Lite...</p>
               <p className="text-[10px] sm:text-xs text-slate-400">Extracting structural properties, generating layout guidelines and rulesets</p>
             </div>
           </div>

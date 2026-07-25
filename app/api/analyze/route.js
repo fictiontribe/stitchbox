@@ -24,7 +24,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { imageBase64, mimeType } = body;
+    const { imageBase64, mimeType, existingItems } = body;
 
     if (!imageBase64) {
       return Response.json({ error: "Missing imageBase64 parameter." }, { status: 400 });
@@ -41,7 +41,7 @@ export async function POST(request) {
         if (Array.isArray(listData.models)) {
           availableModelNames = listData.models
             .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
-            .map(m => m.name); // e.g. ["models/gemini-1.5-flash", "models/gemini-1.5-pro", ...]
+            .map(m => m.name); // e.g. ["models/gemini-2.5-flash-lite", "models/gemini-2.0-flash", ...]
         }
       } else {
         listModelsError = await listRes.text();
@@ -50,38 +50,61 @@ export async function POST(request) {
       listModelsError = err.message;
     }
 
-    // Fallback list of model full names if ListModels fetch failed
+    // Explicit model priority list starting with gemini-2.5-flash-lite
+    const preferredOrder = [
+      "models/gemini-2.5-flash-lite",
+      "models/gemini-2.5-flash-lite-latest",
+      "models/gemini-2.5-flash",
+      "models/gemini-2.0-flash-lite",
+      "models/gemini-2.0-flash-lite-preview-02-05",
+      "models/gemini-2.0-flash",
+      "models/gemini-2.0-flash-exp",
+      "models/gemini-1.5-flash",
+      "models/gemini-1.5-flash-latest"
+    ];
+
     if (availableModelNames.length === 0) {
-      availableModelNames = [
-        "models/gemini-1.5-flash",
-        "models/gemini-1.5-flash-latest",
-        "models/gemini-1.5-pro",
-        "models/gemini-1.5-pro-latest",
-        "models/gemini-2.0-flash-exp"
-      ];
+      availableModelNames = preferredOrder;
     } else {
-      // Sort models to prioritize Flash models first, then Pro models
+      // Sort models according to preferredOrder, pushing unrecognized models to the end
       availableModelNames.sort((a, b) => {
-        if (a.includes('flash') && !b.includes('flash')) return -1;
-        if (!a.includes('flash') && b.includes('flash')) return 1;
+        const idxA = preferredOrder.indexOf(a);
+        const idxB = preferredOrder.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
         return 0;
+      });
+      // Always ensure preferred models are attempted first
+      preferredOrder.forEach(model => {
+        if (!availableModelNames.includes(model)) {
+          availableModelNames.unshift(model);
+        }
       });
     }
 
-    const systemPrompt = `You are the design intelligence engine for StitchBox. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.
+    // Format existing collection context if provided
+    let collectionContext = "";
+    if (Array.isArray(existingItems) && existingItems.length > 0) {
+      const itemSummaries = existingItems.map(item => `- "${item.creativeName || 'Asset'}": Tags=[${(item.baseTags || []).join(', ')}], Tokens=[${(item.tokens || []).slice(0, 5).join(', ')}]`).join('\n');
+      collectionContext = `\n\nCURRENT COLLECTION CONTEXT:\nThe board currently contains the following assets:\n${itemSummaries}\nAnalyze the uploaded image in relation to the current collection above so that generated baseTags reflect and categorize this item accurately within the overall collection taxonomy.`;
+    }
+
+    const systemPrompt = `You are the design intelligence engine for StitchBox operating on Gemini 2.5 Flash-Lite. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
 
 Examine the screenshot with high fidelity:
 - Sample exact dominant color hex values for surface background, cards, primary headlines, accent buttons, and body typography.
 - Identify specific font classifications (e.g. 'Grotesk Display', 'Serif', 'Geometric Sans', 'Monospace').
 - Measure layout density, container border-radius, and border style.
 - Detect special visual effects (e.g., 1-bit dither, topographic lines, halftone, glassmorphism, noise grain).
+- Generate dynamic, contextual baseTags (1 to 3 high-level categories/tags) that categorize this asset in relation to the collection created (e.g., 'SaaS/B2B', 'Editorial', 'Brutalist', 'Consumer', 'Developer Tools', 'Fintech', 'Portfolio', 'E-Commerce', 'Dark Mode', 'Minimalist').
 
 Generate the output matching this exact JSON schema:
 {
   "creativeName": "An evocative, creative, synthesized name for the design identity (e.g. 'Proteomics Ink', 'Dither Mono', 'Print-Tech Paper')",
   "summary": "A precise, 2-3 sentence visual summary detailing the design's layout hierarchy, color palette, typography rhythm, and unique aesthetic feel.",
   "tokens": ["8 to 12 explicit, lowercase aesthetic tags representing colors, fonts, layouts, and textures used"],
-  "baseTags": ["Subset matching at least one of: 'Editorial', 'SaaS/B2B', 'Brutalist', 'Consumer', 'Mono', 'Textured'"],
+  "baseTags": ["1 to 3 dynamic high-level taxonomy tags reflecting the visual style and functional category of the asset relative to the collection"],
   "recipe": {
     "aestheticFamily": "A 2-word family name (e.g., 'tactile-technical', 'brutalist-editorial', 'clean-minimalism')",
     "vocabularyTerms": ["6 to 8 specific design descriptors"],

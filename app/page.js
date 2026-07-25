@@ -203,10 +203,17 @@ export default function Home() {
   };
 
   const runDnaExtraction = async (rawBase64, mimeType) => {
+    const existingItems = library.map(item => ({
+      creativeName: item.creativeName,
+      summary: item.summary,
+      tokens: item.tokens,
+      baseTags: item.baseTags
+    }));
+
     const response = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: rawBase64, mimeType })
+      body: JSON.stringify({ imageBase64: rawBase64, mimeType, existingItems })
     });
 
     const data = await response.json().catch(() => ({}));
