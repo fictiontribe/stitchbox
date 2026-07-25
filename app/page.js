@@ -74,18 +74,71 @@ export default function Home() {
       'a decentralized physical infrastructure protocol',
       'a collaborative editorial editor for long-form writers',
       'a spatial developer environment for VR interfaces',
-      'an automated supply-chain accounting engine'
+      'an automated supply-chain accounting engine',
+      'a biotech research workflow dashboard for genomic sequencing',
+      'a high-frequency algorithmic trading terminal',
+      'a minimalist digital design agency portfolio',
+      'a real-time AI voice transcription and summarization platform',
+      'an open-source developer documentation portal',
+      'a climate analytics and carbon offset dashboard'
     ];
-    const styles = ['Print-Tech Paper styling with topo-ink overlays', 'Dither Mono raw contrast grid rules', 'Vast Quiet Cinematic fog borders'];
-    const randomSubject = subjects[Math.floor(Math.random() * subjects.length)];
-    const randomStyle = styles[Math.floor(Math.random() * styles.length)];
-    setDailySpark({ subject: randomSubject, style: randomStyle });
+    const styles = [
+      'Print-Tech Paper styling with topo-ink overlays',
+      'Dither Mono raw contrast grid rules',
+      'Vast Quiet Cinematic fog borders',
+      'Brutalist Monochrome typographic grid layout',
+      'Neumorphic Dark Glassmorphism glow effects',
+      'Editorial Serif headlines with warm cream background',
+      'High-contrast SaaS Dark Mode with neon accents'
+    ];
+
+    setDailySpark(prev => {
+      let nextSubject, nextStyle;
+      do {
+        nextSubject = subjects[Math.floor(Math.random() * subjects.length)];
+        nextStyle = styles[Math.floor(Math.random() * styles.length)];
+      } while (prev && nextSubject === prev.subject && nextStyle === prev.style);
+      return { subject: nextSubject, style: nextStyle };
+    });
   };
 
+  const onApplySpark = () => {
+    if (dailySpark?.subject) {
+      setCustomSubject(dailySpark.subject);
+    }
+  };
+
+  // 1. Dynamic base tags generated directly from board assets
   const allBaseTags = useMemo(() => {
-    const defaultKeys = Object.keys(TAG_RELATIONS);
-    return [...new Set([...defaultKeys, ...customTags])];
-  }, [customTags]);
+    const tagSet = new Set();
+    library.forEach(item => {
+      if (Array.isArray(item.baseTags)) {
+        item.baseTags.forEach(tag => tagSet.add(tag));
+      }
+    });
+    customTags.forEach(tag => tagSet.add(tag));
+    if (tagSet.size === 0) {
+      Object.keys(TAG_RELATIONS).forEach(tag => tagSet.add(tag));
+    }
+    return Array.from(tagSet);
+  }, [library, customTags]);
+
+  // 2. Dynamic vocabulary / sub-tags generated directly from board assets for active base tag
+  const currentSubTags = useMemo(() => {
+    if (!activeBaseTag) return [];
+    const tokenSet = new Set();
+    library.forEach(item => {
+      if (item.baseTags && item.baseTags.includes(activeBaseTag)) {
+        if (Array.isArray(item.tokens)) {
+          item.tokens.forEach(tok => tokenSet.add(tok));
+        }
+      }
+    });
+    if (TAG_RELATIONS[activeBaseTag]) {
+      TAG_RELATIONS[activeBaseTag].forEach(tok => tokenSet.add(tok));
+    }
+    return Array.from(tokenSet);
+  }, [library, activeBaseTag]);
 
   const handleAddCustomTag = (newTag) => {
     const updated = saveCustomBaseTag(newTag);
@@ -103,7 +156,6 @@ export default function Home() {
     return list;
   }, [library, activeBaseTag, activeSubTag]);
 
-  // Drag and Drop Handlers for the board
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -392,12 +444,14 @@ export default function Home() {
         <DailySpark
           dailySpark={dailySpark}
           generateNewSpark={generateNewSpark}
+          onApplySpark={onApplySpark}
         />
 
         <TagFilterBar
           allBaseTags={allBaseTags}
           activeBaseTag={activeBaseTag}
           activeSubTag={activeSubTag}
+          currentSubTags={currentSubTags}
           handleBaseTagClick={handleBaseTagClick}
           setActiveSubTag={setActiveSubTag}
           clearFilters={() => { setActiveBaseTag(null); setActiveSubTag(null); }}
@@ -421,6 +475,8 @@ export default function Home() {
         library={library}
         executeBlend={executeBlend}
         clearBlend={clearBlend}
+        customSubject={customSubject}
+        setCustomSubject={setCustomSubject}
       />
 
       <DetailModal

@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { TAG_RELATIONS, VOCAB_DICTIONARY } from '../data/seedData';
+import { VOCAB_DICTIONARY } from '../data/seedData';
 
 export default function TagFilterBar({
   allBaseTags,
   activeBaseTag,
   activeSubTag,
+  currentSubTags = [],
   handleBaseTagClick,
   setActiveSubTag,
   clearFilters,
@@ -23,8 +24,6 @@ export default function TagFilterBar({
       setIsAddingTag(false);
     }
   };
-
-  const currentSubTags = TAG_RELATIONS[activeBaseTag] || [];
 
   return (
     <section className="border-b border-slate-800/80 px-8 py-5 glass-panel">
@@ -73,7 +72,7 @@ export default function TagFilterBar({
 
       {activeBaseTag && currentSubTags.length > 0 && (
         <div className="mt-4 pt-4 border-t border-slate-800/60 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider mr-2">Dynamic Vocabulary Map:</span>
+          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider mr-2">Dynamic Asset Vocabulary:</span>
           {currentSubTags.map((subTag) => (
             <div key={subTag} className="group relative cursor-pointer" onClick={() => setActiveSubTag(activeSubTag === subTag ? null : subTag)}>
               <span className={`text-xs px-3 py-1 font-mono rounded-md border block transition ${
@@ -83,7 +82,7 @@ export default function TagFilterBar({
               </span>
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 hidden group-hover:block bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-2xl z-20 text-xs text-slate-200">
                 <p className="font-semibold text-indigo-300 mb-1 font-mono">{subTag}</p>
-                <p className="text-slate-300 font-sans leading-relaxed">{VOCAB_DICTIONARY[subTag] || 'Specific design keyword'}</p>
+                <p className="text-slate-300 font-sans leading-relaxed">{VOCAB_DICTIONARY[subTag] || 'Extracted design keyword'}</p>
               </div>
             </div>
           ))}

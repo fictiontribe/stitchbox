@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-export default function DailySpark({ dailySpark, generateNewSpark }) {
+export default function DailySpark({ dailySpark, generateNewSpark, onApplySpark }) {
   if (!dailySpark) return null;
 
   return (
@@ -12,11 +12,14 @@ export default function DailySpark({ dailySpark, generateNewSpark }) {
         <div>
           <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400">Proactive Inspiration Challenge</h4>
           <p className="text-xs text-slate-200 mt-0.5">
-            Generate <span className="text-indigo-300 font-semibold">"{dailySpark.subject}"</span> using <span className="text-indigo-300 font-semibold">{dailySpark.style}</span>.
+            Generate <button onClick={onApplySpark} title="Click to apply as target subject" className="text-indigo-300 font-semibold underline decoration-indigo-500/50 hover:text-white transition">"{dailySpark.subject}"</button> using <span className="text-indigo-300 font-semibold">{dailySpark.style}</span>.
           </p>
         </div>
       </div>
-      <button onClick={generateNewSpark} className="text-xs font-mono text-slate-400 hover:text-slate-100 transition border border-slate-800 hover:border-slate-600 px-3 py-1.5 rounded-md bg-slate-900/60">Re-Roll Idea</button>
+      <div className="flex items-center gap-2">
+        <button onClick={onApplySpark} className="text-xs font-mono text-indigo-300 hover:text-white transition border border-indigo-800 hover:border-indigo-500 px-3 py-1.5 rounded-md bg-indigo-950/60 shadow">Use as Subject</button>
+        <button onClick={generateNewSpark} className="text-xs font-mono text-slate-300 hover:text-white transition border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-md bg-slate-900 shadow">Re-Roll Idea 🎲</button>
+      </div>
     </section>
   );
 }
