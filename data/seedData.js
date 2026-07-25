@@ -77,17 +77,17 @@ Refer to the structural, aesthetic, color tokens, and layout constraints defined
 ## 1. CSS Design Tokens (:root)
 \`\`\`css
 :root {
-  --color-primary: ${colors.primary || '#ffffff'};
-  --color-secondary: ${colors.secondary || '#888888'};
-  --color-accent: ${colors.accent || '#6366f1'};
-  --color-surface: ${colors.surface || '#0f172a'};
-  --color-card: ${colors.card || '#1e293b'};
-  --color-text: ${colors.neutralText || '#f8fafc'};
+  --color-light-base: ${colors.lightBase || colors.surface || '#f8fafc'};
+  --color-dark-base: ${colors.darkBase || colors.card || '#0f172a'};
+  --color-accent-a: ${colors.accentA || colors.primary || '#4f46e5'};
+  --color-accent-b: ${colors.accentB || colors.secondary || '#10b981'};
+  --color-accent-synth: ${colors.synthesizedAccent || colors.accent || '#6366f1'};
+  --color-neutral-text: ${colors.neutralText || '#0f172a'};
   --font-heading: "${typo.headingFont || 'Outfit, sans-serif'}";
   --font-body: "${typo.bodyFont || 'Inter, sans-serif'}";
   --spacing-base: ${spacing.baseUnit || '8px'};
   --radius-container: ${shape.borderRadius || '8px'};
-  --border-style: ${shape.borderStyle || '1px solid rgba(255,255,255,0.1)'};
+  --border-style: ${shape.borderStyle || '1px solid rgba(0,0,0,0.1)'};
 }
 \`\`\`
 

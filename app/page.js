@@ -16,6 +16,8 @@ import {
   saveCustomBaseTag
 } from '../data/dbStorage';
 
+import { synthesizeSixColorPalette } from '../lib/colorSynthesis';
+
 import Header from '../components/Header';
 import NoticeBanners from '../components/NoticeBanners';
 import DailySpark from '../components/DailySpark';
@@ -85,9 +87,9 @@ export default function Home() {
       'Dither Mono raw contrast grid rules',
       'Vast Quiet Cinematic fog borders',
       'Brutalist Monochrome typographic grid layout',
-      'Neumorphic Dark Glassmorphism glow effects',
+      'Neumorphic Glassmorphism glow effects',
       'Editorial Serif headlines with warm cream background',
-      'High-contrast SaaS Dark Mode with neon accents'
+      'High-contrast SaaS Light Mode with vibrant accents'
     ];
 
     setDailySpark(prev => {
@@ -188,19 +190,6 @@ export default function Home() {
         });
       }
     }
-  };
-
-  const handleDeleteItem = async (id) => {
-    setLibrary(prev => prev.filter(item => item.id !== id));
-    fetch('/api/library', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    }).catch(err => console.error("Failed to delete from Cloudflare KV:", err));
-
-    if (selectedItem?.id === id) setSelectedItem(null);
-    if (blendSlotA === id) setBlendSlotA(null);
-    if (blendSlotB === id) setBlendSlotB(null);
   };
 
   const runDnaExtraction = async (rawBase64, mimeType) => {
@@ -379,15 +368,11 @@ export default function Home() {
     const combinedAlways = [...a.recipe.alwaysRules.slice(0, 2), ...b.recipe.alwaysRules.slice(0, 2)];
     const combinedNever = [...a.recipe.neverRules.slice(0, 2), ...b.recipe.neverRules.slice(0, 2)];
 
+    // Synthesize a harmonious 6-color palette
+    const synthesizedColors = synthesizeSixColorPalette(colA, colB);
+
     const blendedDesignSystem = {
-      color: {
-        primary: colA.primary || '#ffffff',
-        secondary: colB.secondary || colA.secondary || '#888888',
-        accent: colB.accent || colA.accent || '#6366f1',
-        surface: colA.surface || '#0f172a',
-        card: colB.card || colA.card || '#1e293b',
-        neutralText: colA.neutralText || '#f8fafc'
-      },
+      color: synthesizedColors,
       typography: {
         headingFont: `${typA.headingFont || 'Display'} / ${typB.headingFont || 'Sans'}`,
         bodyFont: typB.bodyFont || typA.bodyFont || 'Inter',
@@ -399,8 +384,8 @@ export default function Home() {
         density: 'comfortable'
       },
       shape: {
-        borderRadius: dsB.shape?.borderRadius || dsA.shape?.borderRadius || '4px',
-        borderStyle: dsA.shape?.borderStyle || '1px solid rgba(255,255,255,0.1)'
+        borderRadius: dsB.shape?.borderRadius || dsA.shape?.borderRadius || '8px',
+        borderStyle: dsA.shape?.borderStyle || '1px solid rgba(0,0,0,0.1)'
       }
     };
 
@@ -440,21 +425,21 @@ export default function Home() {
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col justify-between relative"
+      className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-600 selection:text-white flex flex-col justify-between relative"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       {/* Full-screen Drag Overlay */}
       {isDragging && (
-        <div className="fixed inset-0 bg-indigo-950/90 border-4 border-dashed border-indigo-400 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md pointer-events-none transition-all shadow-2xl">
+        <div className="fixed inset-0 bg-indigo-50/95 border-4 border-dashed border-indigo-500 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md pointer-events-none transition-all shadow-2xl">
           <div className="bg-indigo-600 text-white p-6 rounded-full shadow-2xl animate-bounce mb-4">
             <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-white font-display tracking-tight">Drop Website Screenshot Here</h2>
-          <p className="text-sm text-indigo-200 mt-2 font-mono">Deconstruct Design DNA automatically with Gemini 2.0 Flash</p>
+          <h2 className="text-2xl font-bold text-slate-900 font-display tracking-tight">Drop Website Screenshot Here</h2>
+          <p className="text-sm text-indigo-700 mt-2 font-mono font-semibold">Deconstruct Design DNA automatically with Gemini 2.5 Flash</p>
         </div>
       )}
 
@@ -486,7 +471,6 @@ export default function Home() {
           handleBaseTagClick={handleBaseTagClick}
           setActiveSubTag={setActiveSubTag}
           clearFilters={() => { setActiveBaseTag(null); setActiveSubTag(null); }}
-          onAddCustomTag={handleAddCustomTag}
         />
 
         <DashboardGrid
@@ -495,7 +479,6 @@ export default function Home() {
           setSelectedItem={setSelectedItem}
           setBlendSlotA={setBlendSlotA}
           setBlendSlotB={setBlendSlotB}
-          handleDeleteItem={handleDeleteItem}
         />
       </div>
 
