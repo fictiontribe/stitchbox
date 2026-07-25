@@ -23,6 +23,7 @@ import TagFilterBar from '../components/TagFilterBar';
 import DashboardGrid from '../components/DashboardGrid';
 import BlenderConsole from '../components/BlenderConsole';
 import DetailModal from '../components/DetailModal';
+import Footer from '../components/Footer';
 
 export default function Home() {
   const [library, setLibrary] = useState([]);
@@ -518,6 +519,8 @@ export default function Home() {
         copiedType={copiedType}
         setActiveSubTag={setActiveSubTag}
       />
+
+      <Footer />
     </div>
   );
 }

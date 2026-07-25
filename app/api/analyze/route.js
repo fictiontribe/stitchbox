@@ -30,9 +30,19 @@ export async function POST(request) {
       return Response.json({ error: "Missing imageBase64 parameter." }, { status: 400 });
     }
 
-    // 1. Discover active models directly from Google AI Studio for this specific API key
-    let candidateModels = [];
-    let listModelsError = null;
+    // Explicit model candidate priority strictly targeting Gemini 2.5 Flash-Lite first
+    const preferredCandidates = [
+      "models/gemini-2.5-flash-lite",
+      "models/gemini-2.5-flash-lite-preview",
+      "models/gemini-2.5-flash-lite-001",
+      "models/gemini-2.5-flash",
+      "models/gemini-2.0-flash-lite",
+      "models/gemini-2.0-flash-lite-preview-02-05",
+      "models/gemini-2.0-flash"
+    ];
+
+    // 1. Discover models directly from Google AI Studio ListModels API for this specific key
+    let candidateModels = preferredCandidates;
 
     try {
       const controller = new AbortController();
@@ -46,49 +56,22 @@ export async function POST(request) {
       if (listRes.ok) {
         const listData = await listRes.json();
         if (Array.isArray(listData.models)) {
-          const supported = listData.models
+          const activeList = listData.models
             .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
-            .map(m => m.name); // e.g. ["models/gemini-1.5-flash", "models/gemini-1.5-flash-8b", "models/gemini-2.0-flash-exp"]
+            .map(m => m.name);
 
-          // Sort by user preference: 2.5-flash-lite -> 2.0-flash -> 1.5-flash-8b -> 1.5-flash
-          const prefOrder = [
-            "2.5-flash-lite",
-            "2.5-flash",
-            "2.0-flash",
-            "1.5-flash-8b",
-            "1.5-flash",
-            "1.5-pro"
-          ];
-
-          supported.sort((a, b) => {
-            const scoreA = prefOrder.findIndex(p => a.toLowerCase().includes(p));
-            const scoreB = prefOrder.findIndex(p => b.toLowerCase().includes(p));
-            const valA = scoreA === -1 ? 99 : scoreA;
-            const valB = scoreB === -1 ? 99 : scoreB;
-            return valA - valB;
-          });
-
-          candidateModels = supported;
+          // If ListModels returned valid endpoints, merge preferred candidates with active list
+          const activeCandidates = preferredCandidates.filter(m => activeList.includes(m));
+          if (activeCandidates.length > 0) {
+            candidateModels = activeCandidates;
+          } else if (activeList.length > 0) {
+            candidateModels = activeList;
+          }
         }
-      } else {
-        listModelsError = await listRes.text();
       }
     } catch (err) {
-      listModelsError = err.message;
+      // Use preferredCandidates fallback
     }
-
-    // Fallback if ListModels endpoint returned empty or was unreachable
-    if (candidateModels.length === 0) {
-      candidateModels = [
-        "models/gemini-1.5-flash",
-        "models/gemini-1.5-flash-8b",
-        "models/gemini-2.0-flash-exp",
-        "models/gemini-1.5-pro"
-      ];
-    }
-
-    // Limit to top 2 valid candidates to avoid latency
-    const targetModels = candidateModels.slice(0, 2);
 
     // Format existing collection context if provided
     let collectionContext = "";
@@ -97,7 +80,7 @@ export async function POST(request) {
       collectionContext = `\n\nCURRENT COLLECTION CONTEXT:\nThe board currently contains the following assets:\n${itemSummaries}\nAnalyze the uploaded image in relation to the collection above so that generated baseTags reflect and categorize this item accurately within the overall collection taxonomy.`;
     }
 
-    const systemPrompt = `You are the design intelligence engine for StitchBox. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
+    const systemPrompt = `You are the design intelligence engine for StitchBox operating on Gemini 2.5 Flash-Lite. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
 
 Examine the screenshot with high fidelity:
 - Sample exact dominant color hex values for surface background, cards, primary headlines, accent buttons, and body typography.
@@ -182,7 +165,7 @@ Generate the output matching this exact JSON schema:
     let lastError = null;
     let parsedDNA = null;
 
-    for (const fullModelPath of targetModels) {
+    for (const fullModelPath of candidateModels) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 18000);
@@ -214,7 +197,7 @@ Generate the output matching this exact JSON schema:
 
     if (!parsedDNA) {
       return Response.json({ 
-        error: `Gemini API call failed (${targetModels.join(', ')}). Last error: ${lastError || listModelsError}` 
+        error: `Gemini API call failed (${candidateModels.join(', ')}). Last error: ${lastError}` 
       }, { status: 500 });
     }
 
