@@ -1,11 +1,25 @@
+import { getRequestContext } from '@cloudflare/next-on-pages';
+
 export const runtime = 'edge';
 
 export async function POST(request) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.VERTEX_API_KEY;
+    let apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.VERTEX_API_KEY;
+
+    try {
+      const ctx = getRequestContext();
+      if (ctx?.env?.GEMINI_API_KEY) {
+        apiKey = ctx.env.GEMINI_API_KEY;
+      } else if (ctx?.env?.VERTEX_API_KEY) {
+        apiKey = ctx.env.VERTEX_API_KEY;
+      }
+    } catch (e) {
+      // getRequestContext may throw when running outside Cloudflare edge worker environment
+    }
+
     if (!apiKey) {
       return Response.json({ 
-        error: "GEMINI_API_KEY environment variable is not configured. Please add GEMINI_API_KEY in Cloudflare Pages Settings -> Environment Variables (or .env.local for local development)." 
+        error: "GEMINI_API_KEY environment variable is not configured. Please add GEMINI_API_KEY in Cloudflare Pages Settings -> Environment Variables/Secrets (or .env.local for local development)." 
       }, { status: 500 });
     }
 

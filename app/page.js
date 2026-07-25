@@ -14,6 +14,7 @@ import {
 import {
   getAllLibraryItems,
   saveLibraryItem,
+  deleteLibraryItem,
   getCustomBaseTags,
   saveCustomBaseTag
 } from '../data/dbStorage';
@@ -135,6 +136,14 @@ export default function Home() {
         });
       }
     }
+  };
+
+  const handleDeleteItem = async (id) => {
+    setLibrary(prev => prev.filter(item => item.id !== id));
+    await deleteLibraryItem(id);
+    if (selectedItem?.id === id) setSelectedItem(null);
+    if (blendSlotA === id) setBlendSlotA(null);
+    if (blendSlotB === id) setBlendSlotB(null);
   };
 
   const runDnaExtraction = async (rawBase64, mimeType) => {
@@ -401,6 +410,7 @@ export default function Home() {
           setSelectedItem={setSelectedItem}
           setBlendSlotA={setBlendSlotA}
           setBlendSlotB={setBlendSlotB}
+          handleDeleteItem={handleDeleteItem}
         />
       </div>
 
