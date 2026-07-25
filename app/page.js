@@ -28,7 +28,7 @@ import BlenderConsole from '../components/BlenderConsole';
 import DetailModal from '../components/DetailModal';
 
 export default function Home() {
-  const [library, setLibrary] = useState(INITIAL_LIBRARY);
+  const [library, setLibrary] = useState([]);
   const [customTags, setCustomTags] = useState([]);
   const [activeBaseTag, setActiveBaseTag] = useState(null);
   const [activeSubTag, setActiveSubTag] = useState(null);
@@ -51,28 +51,28 @@ export default function Home() {
 
       const syncDatabase = async () => {
         try {
-          // Fetch shared items from server API so uploaded assets persist across users
+          // Fetch persistent shared items from Cloudflare KV
           const res = await fetch('/api/library');
           const data = await res.json().catch(() => ({}));
           const serverItems = (data && data.success && Array.isArray(data.items)) ? data.items : [];
 
-          const localItems = await getAllLibraryItems();
-
-          const itemMap = new Map();
-          [...serverItems, ...localItems].forEach(item => {
-            if (item && item.id) itemMap.set(item.id, item);
-          });
-
-          const combined = Array.from(itemMap.values());
-          setLibrary(combined);
-
-          if (serverItems.length === 0 && localItems.length > 0) {
-            for (const item of localItems) {
-              fetch('/api/library', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(item)
-              }).catch(() => {});
+          if (serverItems.length > 0) {
+            setLibrary(serverItems);
+            for (const item of serverItems) {
+              await saveLibraryItem(item);
+            }
+          } else {
+            // If KV is empty, check local IndexedDB
+            const localItems = await getAllLibraryItems();
+            if (localItems && localItems.length > 0) {
+              setLibrary(localItems);
+              for (const item of localItems) {
+                fetch('/api/library', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(item)
+                }).catch(() => {});
+              }
             }
           }
         } catch (err) {
@@ -217,7 +217,7 @@ export default function Home() {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })
-    }).catch(() => {});
+    }).catch(err => console.error("Failed to delete from Cloudflare KV:", err));
 
     if (selectedItem?.id === id) setSelectedItem(null);
     if (blendSlotA === id) setBlendSlotA(null);
@@ -268,11 +268,13 @@ export default function Home() {
 
       setLibrary(prev => [newDnaItem, ...prev]);
       await saveLibraryItem(newDnaItem);
-      fetch('/api/library', {
+
+      // Save item globally to Cloudflare KV
+      await fetch('/api/library', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newDnaItem)
-      }).catch(() => {});
+      }).catch(err => console.error("Failed to save item to Cloudflare KV:", err));
 
       setSelectedItem(newDnaItem);
     } catch (error) {
@@ -335,11 +337,13 @@ export default function Home() {
 
       setLibrary(prev => [newDnaItem, ...prev]);
       await saveLibraryItem(newDnaItem);
-      fetch('/api/library', {
+
+      // Save item globally to Cloudflare KV
+      await fetch('/api/library', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newDnaItem)
-      }).catch(() => {});
+      }).catch(err => console.error("Failed to save item to Cloudflare KV:", err));
 
       setSelectedItem(newDnaItem);
     } catch (error) {

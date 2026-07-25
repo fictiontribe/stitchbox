@@ -2,27 +2,28 @@ import { getRequestContext } from '@cloudflare/next-on-pages';
 
 export const runtime = 'edge';
 
-// Memory store for sharing uploaded assets across edge calls when KV binding is not attached
-let sharedMemoryLibrary = [];
+function getKvBinding() {
+  try {
+    const ctx = getRequestContext();
+    return ctx?.env?.STITCHBOX_KV || process.env.STITCHBOX_KV;
+  } catch (e) {
+    return process.env.STITCHBOX_KV;
+  }
+}
 
 export async function GET() {
   try {
-    let kv;
-    try {
-      const ctx = getRequestContext();
-      kv = ctx?.env?.STITCHBOX_KV;
-    } catch (e) {}
-
+    const kv = getKvBinding();
     if (kv) {
       const stored = await kv.get('shared_library', 'json');
       if (stored && Array.isArray(stored)) {
         return Response.json({ success: true, items: stored });
       }
     }
-
-    return Response.json({ success: true, items: sharedMemoryLibrary });
+    return Response.json({ success: true, items: [] });
   } catch (err) {
-    return Response.json({ success: true, items: sharedMemoryLibrary });
+    console.error("GET /api/library error:", err);
+    return Response.json({ success: false, items: [], error: err.message });
   }
 }
 
@@ -33,22 +34,19 @@ export async function POST(request) {
       return Response.json({ error: "Invalid item payload" }, { status: 400 });
     }
 
-    let kv;
-    try {
-      const ctx = getRequestContext();
-      kv = ctx?.env?.STITCHBOX_KV;
-    } catch (e) {}
-
+    const kv = getKvBinding();
     if (kv) {
       let stored = (await kv.get('shared_library', 'json')) || [];
       stored = [item, ...stored.filter(i => i.id !== item.id)];
+      // Keep up to 50 latest shared board items in persistent Cloudflare KV
+      if (stored.length > 50) stored = stored.slice(0, 50);
       await kv.put('shared_library', JSON.stringify(stored));
       return Response.json({ success: true, items: stored });
-    } else {
-      sharedMemoryLibrary = [item, ...sharedMemoryLibrary.filter(i => i.id !== item.id)];
-      return Response.json({ success: true, items: sharedMemoryLibrary });
     }
+
+    return Response.json({ error: "Cloudflare KV storage binding STITCHBOX_KV not available" }, { status: 500 });
   } catch (err) {
+    console.error("POST /api/library error:", err);
     return Response.json({ error: err.message }, { status: 500 });
   }
 }
@@ -56,22 +54,16 @@ export async function POST(request) {
 export async function DELETE(request) {
   try {
     const { id } = await request.json();
-    let kv;
-    try {
-      const ctx = getRequestContext();
-      kv = ctx?.env?.STITCHBOX_KV;
-    } catch (e) {}
-
+    const kv = getKvBinding();
     if (kv) {
       let stored = (await kv.get('shared_library', 'json')) || [];
       stored = stored.filter(i => i.id !== id);
       await kv.put('shared_library', JSON.stringify(stored));
       return Response.json({ success: true, items: stored });
-    } else {
-      sharedMemoryLibrary = sharedMemoryLibrary.filter(i => i.id !== id);
-      return Response.json({ success: true, items: sharedMemoryLibrary });
     }
+    return Response.json({ error: "Cloudflare KV storage binding STITCHBOX_KV not available" }, { status: 500 });
   } catch (err) {
+    console.error("DELETE /api/library error:", err);
     return Response.json({ error: err.message }, { status: 500 });
   }
 }

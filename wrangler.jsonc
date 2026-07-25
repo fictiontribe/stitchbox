@@ -1,9 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stitchbox",
-  "pages_build_output_dir": "./dist",
+  "pages_build_output_dir": "./.vercel/output/static",
   "compatibility_date": "2026-07-24",
   "compatibility_flags": [
     "nodejs_compat"
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "STITCHBOX_KV",
+      "id": "fa644479789441e0a60ca3c270c60f00"
+    }
   ]
 }
