@@ -25,7 +25,7 @@ export default function Header({
         </div>
 
         <form onSubmit={handleUrlIngest} className="flex bg-slate-900 border border-slate-800 rounded-lg focus-within:border-indigo-500 transition overflow-hidden shadow-inner">
-          <input type="url" placeholder="Paste URL to capture..." value={urlInput} onChange={(e) => setUrlInput(e.target.value)} className="bg-transparent text-xs text-slate-100 px-3 py-2 outline-none w-44 placeholder-slate-500 font-mono" disabled={isProcessing} />
+          <input type="text" placeholder="Paste URL (e.g. gitlab.com)..." value={urlInput} onChange={(e) => setUrlInput(e.target.value)} className="bg-transparent text-xs text-slate-100 px-3 py-2 outline-none w-48 placeholder-slate-500 font-mono" disabled={isProcessing} />
           <button type="submit" className="bg-slate-800 hover:bg-slate-700 px-3 text-xs font-mono transition border-l border-slate-800 text-slate-300" disabled={isProcessing}>
             {isProcessing ? 'Analyzing...' : 'Analyze URL'}
           </button>
