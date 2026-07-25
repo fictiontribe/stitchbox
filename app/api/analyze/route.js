@@ -111,27 +111,47 @@ Generate the output matching this exact JSON schema:
       }
     };
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(geminiPayload)
-    });
+    const candidateModels = [
+      "gemini-2.5-flash",
+      "gemini-1.5-flash",
+      "gemini-2.5-pro",
+      "gemini-1.5-pro"
+    ];
 
-    if (!response.ok) {
-      const errText = await response.text();
+    let lastError = null;
+    let parsedDNA = null;
+
+    for (const modelName of candidateModels) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(geminiPayload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          try {
+            parsedDNA = JSON.parse(rawText);
+            break;
+          } catch (e) {
+            lastError = `Failed to parse JSON response from ${modelName}`;
+          }
+        }
+      } else {
+        const errText = await response.text();
+        lastError = `Model ${modelName} returned status ${response.status}: ${errText}`;
+      }
+    }
+
+    if (!parsedDNA) {
       return Response.json({ 
-        error: `Gemini API call failed with status ${response.status}: ${errText}` 
-      }, { status: response.status });
+        error: `Gemini API error across candidate models: ${lastError}` 
+      }, { status: 500 });
     }
 
-    const data = await response.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) {
-      return Response.json({ error: "Empty response received from Gemini AI model." }, { status: 500 });
-    }
-
-    const parsedDNA = JSON.parse(rawText);
     return Response.json({ success: true, dna: parsedDNA });
 
   } catch (error) {
