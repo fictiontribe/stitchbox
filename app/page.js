@@ -1,14 +1,12 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 import {
   INITIAL_LIBRARY,
   TAG_RELATIONS,
   fileToBase64,
   compileStitchPrompt,
-  compileBrief,
   fetchUrlScreenshot,
   imageUrlToBase64
 } from '../data/seedData';
@@ -43,16 +41,10 @@ export default function Home() {
   const [urlInput, setUrlInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [apiError, setApiError] = useState(null);
-  const [apiKey, setApiKey] = useState('');
-  const [isKeySaved, setIsKeySaved] = useState(false);
-  const [isCloudManaged, setIsCloudManaged] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedKey = localStorage.getItem('GEMINI_API_KEY') || '';
-      setApiKey(savedKey);
-      setIsKeySaved(!!savedKey);
-
       const loadedTags = getCustomBaseTags();
       setCustomTags(loadedTags);
 
@@ -69,33 +61,8 @@ export default function Home() {
         }
       };
       syncDatabase();
-
-      // Check if Next.js serverless API route endpoint /api/analyze is reachable
-      fetch('/api/analyze', { method: 'OPTIONS' })
-        .then(res => {
-          if (res.status !== 404) setIsCloudManaged(true);
-        })
-        .catch(() => setIsCloudManaged(false));
     }
   }, []);
-
-  const handleSaveApiKey = (key) => {
-    const trimmed = key.trim();
-    setApiKey(trimmed);
-    if (trimmed) {
-      if (typeof window !== 'undefined') localStorage.setItem('GEMINI_API_KEY', trimmed);
-      setIsKeySaved(true);
-    } else {
-      if (typeof window !== 'undefined') localStorage.removeItem('GEMINI_API_KEY');
-      setIsKeySaved(false);
-    }
-  };
-
-  const handleClearApiKey = () => {
-    setApiKey('');
-    if (typeof window !== 'undefined') localStorage.removeItem('GEMINI_API_KEY');
-    setIsKeySaved(false);
-  };
 
   useEffect(() => {
     generateNewSpark();
@@ -135,121 +102,63 @@ export default function Home() {
     return list;
   }, [library, activeBaseTag, activeSubTag]);
 
-  const runDnaExtraction = async (rawBase64, mimeType) => {
-    const systemPrompt = `You are the design intelligence engine for StitchBox. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.
-
-Sample exact color hex values by area dominance, identify specific font classifications, measure layout density and border radius, and detect special visual effects.
-
-Generate the output matching this exact JSON schema:
-{
-  "creativeName": "A synthesized, creative, evocative name for the style (e.g., 'Dither Mono', 'Print-Tech Paper')",
-  "summary": "A short, inspired 2-3 sentence summary of the design's overall aesthetic impact and mood",
-  "tokens": ["Minimum 6, maximum 12 explicit, lowercase aesthetic tags representing colors, fonts, layouts, and textures used"],
-  "baseTags": ["A subset list matching at least one of these exact values: 'Editorial', 'SaaS/B2B', 'Brutalist', 'Consumer', 'Mono', 'Textured'"],
-  "recipe": {
-    "aestheticFamily": "A 2-word family name (e.g., 'brutalist-editorial', 'clean-minimalism')",
-    "vocabularyTerms": ["5 to 8 specific design descriptors"],
-    "feel": "The raw sensory feel of the reference design",
-    "intent": "The visual purpose or perceived strategic goal of the layout",
-    "alwaysRules": ["3-5 concrete layout, color, typography, or styling rules that must always be present to recreate this aesthetic"],
-    "neverRules": ["3-5 concrete styling choices, layout patterns, or color treatments to strictly avoid"],
-    "designSystem": {
-      "color": {
-        "primary": "#hex for main brand/headline color",
-        "secondary": "#hex for secondary elements/borders",
-        "accent": "#hex for primary call-to-action button or highlight",
-        "surface": "#hex for overall page background",
-        "card": "#hex for card or container background",
-        "neutralText": "#hex for main body typography"
-      },
-      "typography": {
-        "headingFont": "Specific font style or classification (e.g., 'Grotesk Display', 'Geometric Sans', 'Serif')",
-        "bodyFont": "Specific body font family (e.g., 'Inter', 'JetBrains Mono', 'System Sans')",
-        "scaleRatio": "Typographic scale ratio e.g. '1.25' or '1.33'",
-        "letterSpacing": "Tracking style e.g. 'tight', 'normal', 'wide-mono'"
-      },
-      "spacing": {
-        "baseUnit": "Base grid spacing unit e.g. '4px', '8px', '12px'",
-        "density": "'compact', 'comfortable', or 'spacious'"
-      },
-      "shape": {
-        "borderRadius": "Main container border radius e.g. '0px', '4px', '12px', '9999px'",
-        "borderStyle": "Border treatment e.g. '1px solid rgba(255,255,255,0.1)', '2px solid #000', 'none'"
-      }
-    },
-    "visualEffects": {
-      "glassmorphism": {
-        "enabled": true or false,
-        "blurRadius": "Blur amount e.g. '12px' or '0px'",
-        "transparency": "Surface transparency e.g. '0.85' or '1.0'"
-      },
-      "textureField": {
-        "enabled": true or false,
-        "type": "'1-bit dither', 'halftone', 'topographic-lines', 'noise-grain', 'gradient-mesh', 'none'"
-      },
-      "renderingTier": "'lightweight', 'medium', or 'heavy'"
-    }
-  }
-}`;
-
-    // 1. Next.js Serverless Route execution (/api/analyze) FIRST
-    // Uses persistent GEMINI_API_KEY configured on Cloudflare or server environment
-    try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: rawBase64, mimeType })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.dna) return data.dna;
-      }
-    } catch (e) {
-      console.warn("Next.js Serverless route /api/analyze fetch failed, trying client key fallback.", e);
-    }
-
-    // 2. Client-Side API Key execution if user provided custom override key in UI header
-    if (apiKey) {
-      try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ 
-          model: "gemini-2.0-flash",
-          generationConfig: { responseMimeType: "application/json" }
-        });
-
-        const result = await model.generateContent([
-          { inlineData: { data: rawBase64, mimeType: mimeType || 'image/png' } },
-          systemPrompt
-        ]);
-
-        return JSON.parse(result.response.text());
-      } catch (err) {
-        console.error("Gemini SDK Client Error:", err);
-        const msg = err.message || String(err);
-        let title = "API Key Error";
-        let suggestion = "Verify your API Key at https://aistudio.google.com/ or check billing status.";
-        
-        if (msg.includes("API_KEY_INVALID") || msg.includes("400") || msg.includes("403")) {
-          title = "Invalid Gemini API Key";
-          suggestion = "The API key provided was rejected by Google AI Studio / Vertex. Please check for typos or generate a new key.";
-        } else if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
-          title = "API Rate Limit Exceeded";
-          suggestion = "You have hit Google's free tier rate limit. Please wait 60 seconds before trying another upload.";
-        }
-        
-        throw { title, message: msg, suggestion };
-      }
-    }
-
-    // 3. Fallback Simulation Mode
-    return null;
+  // Drag and Drop Handlers for the board
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.relatedTarget === null || (e.currentTarget && !e.currentTarget.contains(e.relatedTarget))) {
+      setIsDragging(false);
+    }
+  };
 
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        await processImageFile(file);
+      } else {
+        setApiError({
+          title: "Invalid File Type",
+          message: "Please drop an image file (PNG, JPG, WEBP).",
+          suggestion: "Take a screenshot of a website and drop the image file directly onto the board."
+        });
+      }
+    }
+  };
+
+  const runDnaExtraction = async (rawBase64, mimeType) => {
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: rawBase64, mimeType })
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (response.ok && data.success && data.dna) {
+      return data.dna;
+    }
+
+    const errMsg = data.error || `Server HTTP ${response.status} Error`;
+    throw {
+      title: "Gemini Analysis Error",
+      message: errMsg,
+      suggestion: "Set GEMINI_API_KEY in Cloudflare Pages (Settings -> Environment Variables) or in .env.local for local development."
+    };
+  };
+
+  const processImageFile = async (file) => {
     setIsProcessing(true);
     setApiError(null);
 
@@ -258,43 +167,6 @@ Generate the output matching this exact JSON schema:
       const persistentImageDataUrl = `data:${file.type || 'image/png'};base64,${rawBase64}`;
 
       const parsedDNA = await runDnaExtraction(rawBase64, file.type);
-
-      if (!parsedDNA) {
-        setTimeout(async () => {
-          const fallbackItem = {
-            id: String(Date.now()),
-            creativeName: 'Fallback Blueprint',
-            uploadedAt: new Date(),
-            imageUrl: persistentImageDataUrl,
-            summary: 'A structural layout generated in simulated fallback mode. Enter a Gemini API Key to run live deconstruction.',
-            tokens: ['stark-dark', 'minimalism', 'fallback-grid'],
-            baseTags: ['Brutalist', 'Mono'],
-            recipe: {
-              aestheticFamily: 'fallback-simulated',
-              vocabularyTerms: ['wireframe guidelines', 'stark layout', 'simple text blocks'],
-              feel: 'Basic structural visualization.',
-              intent: 'Educational layout representation without active AI interpretation.',
-              alwaysRules: ['Maintain flat monochrome structural shapes.', 'Align text labels directly against coordinate markers.'],
-              neverRules: ['No complex graphic illustrations.', 'No color gradients.'],
-              designSystem: {
-                color: { primary: '#FFFFFF', secondary: '#888888', accent: '#6366F1', surface: '#0F172A', card: '#1E293B', neutralText: '#F8FAFC' },
-                typography: { headingFont: 'Inter Bold', bodyFont: 'Inter', scaleRatio: '1.25', letterSpacing: 'normal' },
-                spacing: { baseUnit: '8px', density: 'comfortable' },
-                shape: { borderRadius: '8px', borderStyle: '1px solid rgba(255,255,255,0.1)' }
-              },
-              visualEffects: {
-                glassmorphism: { enabled: false, blurRadius: '0px', transparency: '1.0' },
-                textureField: { enabled: false, type: 'none' },
-                renderingTier: 'lightweight'
-              }
-            }
-          };
-          setLibrary(prev => [fallbackItem, ...prev]);
-          await saveLibraryItem(fallbackItem);
-          setIsProcessing(false);
-        }, 1200);
-        return;
-      }
 
       const newDnaItem = {
         id: String(Date.now()),
@@ -309,12 +181,18 @@ Generate the output matching this exact JSON schema:
 
       setLibrary(prev => [newDnaItem, ...prev]);
       await saveLibraryItem(newDnaItem);
+      setSelectedItem(newDnaItem);
     } catch (error) {
       console.error("Upload Parsing Error: ", error);
       setApiError(error);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (file) await processImageFile(file);
   };
 
   const handleUrlIngest = async (e) => {
@@ -341,41 +219,15 @@ Generate the output matching this exact JSON schema:
         console.warn('Could not convert image to base64 data URL, storing CDN URL:', e);
       }
 
-      const parsedDNA = base64Data ? await runDnaExtraction(base64Data, mimeType) : null;
-
-      if (!parsedDNA) {
-        const fallbackItem = {
-          id: String(Date.now()),
-          creativeName: `${title} Blueprint`,
-          uploadedAt: new Date(),
-          imageUrl: persistentImageUrl,
-          summary: `Visual screenshot captured from ${title} in simulated fallback mode. Enter a Gemini API Key to run live visual deconstruction.`,
-          tokens: ['topo-ink', 'minimalism', 'url-capture', 'web-blueprint'],
-          baseTags: ['SaaS/B2B', 'Editorial'],
-          recipe: {
-            aestheticFamily: 'url-capture-simulated',
-            vocabularyTerms: ['captured screenshot', 'hero section', 'web typography'],
-            feel: 'Direct site capture visualization.',
-            intent: `Represent design layout of ${title} without active AI interpretation.`,
-            alwaysRules: ['Maintain exact visual layout captured from source site.', 'Extract dominant color palettes.'],
-            neverRules: ['No synthetic stock images.', 'No distorted aspect ratios.'],
-            designSystem: {
-              color: { primary: '#FFFFFF', secondary: '#888888', accent: '#6366F1', surface: '#0F172A', card: '#1E293B', neutralText: '#F8FAFC' },
-              typography: { headingFont: 'Outfit', bodyFont: 'Inter', scaleRatio: '1.25', letterSpacing: 'normal' },
-              spacing: { baseUnit: '8px', density: 'comfortable' },
-              shape: { borderRadius: '8px', borderStyle: '1px solid rgba(255,255,255,0.1)' }
-            },
-            visualEffects: {
-              glassmorphism: { enabled: false, blurRadius: '0px', transparency: '1.0' },
-              textureField: { enabled: false, type: 'none' },
-              renderingTier: 'lightweight'
-            }
-          }
+      if (!base64Data) {
+        throw {
+          title: "Screenshot Capture Error",
+          message: `Unable to capture image from ${urlInput}`,
+          suggestion: "Try uploading a direct screenshot image file instead."
         };
-        setLibrary(prev => [fallbackItem, ...prev]);
-        await saveLibraryItem(fallbackItem);
-        return;
       }
+
+      const parsedDNA = await runDnaExtraction(base64Data, mimeType);
 
       const newDnaItem = {
         id: String(Date.now()),
@@ -390,6 +242,7 @@ Generate the output matching this exact JSON schema:
 
       setLibrary(prev => [newDnaItem, ...prev]);
       await saveLibraryItem(newDnaItem);
+      setSelectedItem(newDnaItem);
     } catch (error) {
       console.error("URL Capture Error: ", error);
       setApiError(error);
@@ -412,13 +265,6 @@ Generate the output matching this exact JSON schema:
     const text = compileStitchPrompt(item, customSubject);
     if (typeof navigator !== 'undefined') navigator.clipboard.writeText(text);
     setCopiedType('prompt');
-    setTimeout(() => setCopiedType(null), 2500);
-  };
-
-  const handleCopyBrief = (item) => {
-    const text = compileBrief(item);
-    if (typeof navigator !== 'undefined') navigator.clipboard.writeText(text);
-    setCopiedType('brief');
     setTimeout(() => setCopiedType(null), 2500);
   };
 
@@ -501,13 +347,27 @@ Generate the output matching this exact JSON schema:
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col justify-between">
+    <div 
+      className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col justify-between relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Full-screen Drag Overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 bg-indigo-950/90 border-4 border-dashed border-indigo-400 z-50 flex flex-col items-center justify-center p-8 backdrop-blur-md pointer-events-none transition-all shadow-2xl">
+          <div className="bg-indigo-600 text-white p-6 rounded-full shadow-2xl animate-bounce mb-4">
+            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white font-display tracking-tight">Drop Website Screenshot Here</h2>
+          <p className="text-sm text-indigo-200 mt-2 font-mono">Deconstruct Design DNA automatically with Gemini 2.0 Flash</p>
+        </div>
+      )}
+
       <div>
         <Header
-          apiKey={apiKey}
-          saveApiKey={handleSaveApiKey}
-          clearApiKey={handleClearApiKey}
-          isKeySaved={isKeySaved}
           handleFileUpload={handleFileUpload}
           handleUrlIngest={handleUrlIngest}
           urlInput={urlInput}
@@ -518,8 +378,6 @@ Generate the output matching this exact JSON schema:
         <NoticeBanners
           apiError={apiError}
           setApiError={setApiError}
-          apiKey={apiKey}
-          isCloudManaged={isCloudManaged}
         />
 
         <DailySpark
@@ -560,7 +418,6 @@ Generate the output matching this exact JSON schema:
         setSelectedItem={setSelectedItem}
         customSubject={customSubject}
         setCustomSubject={setCustomSubject}
-        handleCopyBrief={handleCopyBrief}
         handleCopyPrompt={handleCopyPrompt}
         copiedType={copiedType}
         setActiveSubTag={setActiveSubTag}

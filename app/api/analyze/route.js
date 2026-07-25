@@ -2,10 +2,10 @@ export const runtime = 'edge';
 
 export async function POST(request) {
   try {
-    const apiKey = process.env.VERTEX_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.VERTEX_API_KEY;
     if (!apiKey) {
       return Response.json({ 
-        error: "Cloud Managed API Key is not configured on this Cloudflare deployment. Please set VERTEX_API_KEY or GEMINI_API_KEY in Environment Variables." 
+        error: "GEMINI_API_KEY environment variable is not configured. Please add GEMINI_API_KEY in Cloudflare Pages Settings -> Environment Variables (or .env.local for local development)." 
       }, { status: 500 });
     }
 
@@ -18,50 +18,54 @@ export async function POST(request) {
 
     const systemPrompt = `You are the design intelligence engine for StitchBox. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.
 
-Sample exact color hex values by area dominance, identify specific font classifications, measure layout density and border radius, and detect special visual effects.
+Examine the screenshot with high fidelity:
+- Sample exact dominant color hex values for surface background, cards, primary headlines, accent buttons, and body typography.
+- Identify specific font classifications (e.g. 'Grotesk Display', 'Serif', 'Geometric Sans', 'Monospace').
+- Measure layout density, container border-radius, and border style.
+- Detect special visual effects (e.g., 1-bit dither, topographic lines, halftone, glassmorphism, noise grain).
 
 Generate the output matching this exact JSON schema:
 {
-  "creativeName": "A synthesized, creative, evocative name for the style (e.g., 'Dither Mono', 'Print-Tech Paper')",
-  "summary": "A short, inspired 2-3 sentence summary of the design's overall aesthetic impact and mood",
-  "tokens": ["Minimum 6, maximum 12 explicit, lowercase aesthetic tags representing colors, fonts, layouts, and textures used"],
-  "baseTags": ["A subset list matching at least one of these exact values: 'Editorial', 'SaaS/B2B', 'Brutalist', 'Consumer', 'Mono', 'Textured'"],
+  "creativeName": "An evocative, creative, synthesized name for the design identity (e.g. 'Proteomics Ink', 'Dither Mono', 'Print-Tech Paper')",
+  "summary": "A precise, 2-3 sentence visual summary detailing the design's layout hierarchy, color palette, typography rhythm, and unique aesthetic feel.",
+  "tokens": ["8 to 12 explicit, lowercase aesthetic tags representing colors, fonts, layouts, and textures used"],
+  "baseTags": ["Subset matching at least one of: 'Editorial', 'SaaS/B2B', 'Brutalist', 'Consumer', 'Mono', 'Textured'"],
   "recipe": {
-    "aestheticFamily": "A 2-word family name (e.g., 'brutalist-editorial', 'clean-minimalism')",
-    "vocabularyTerms": ["5 to 8 specific design descriptors"],
-    "feel": "The raw sensory feel of the reference design",
-    "intent": "The visual purpose or perceived strategic goal of the layout",
-    "alwaysRules": ["3-5 concrete layout, color, typography, or styling rules that must always be present to recreate this aesthetic"],
-    "neverRules": ["3-5 concrete styling choices, layout patterns, or color treatments to strictly avoid"],
+    "aestheticFamily": "A 2-word family name (e.g., 'tactile-technical', 'brutalist-editorial', 'clean-minimalism')",
+    "vocabularyTerms": ["6 to 8 specific design descriptors"],
+    "feel": "The raw sensory and emotional feel of the layout",
+    "intent": "The strategic visual purpose of the interface",
+    "alwaysRules": ["4 to 6 concrete, strict layout, typography, color, and styling rules required to recreate this exact UI"],
+    "neverRules": ["4 to 6 strict anti-patterns and styling bans to avoid"],
     "designSystem": {
       "color": {
-        "primary": "#hex for main brand/headline color",
-        "secondary": "#hex for secondary elements/borders",
-        "accent": "#hex for primary call-to-action button or highlight",
-        "surface": "#hex for overall page background",
-        "card": "#hex for card or container background",
+        "primary": "#hex for main headline/brand color",
+        "secondary": "#hex for borders and muted elements",
+        "accent": "#hex for call-to-action buttons or highlights",
+        "surface": "#hex for overall main page background",
+        "card": "#hex for container/card background",
         "neutralText": "#hex for main body typography"
       },
       "typography": {
-        "headingFont": "Specific font style or classification (e.g., 'Grotesk Display', 'Geometric Sans', 'Serif')",
-        "bodyFont": "Specific body font family (e.g., 'Inter', 'JetBrains Mono', 'System Sans')",
-        "scaleRatio": "Typographic scale ratio e.g. '1.25' or '1.33'",
+        "headingFont": "Specific font style or classification (e.g. 'Grotesk Display', 'Serif', 'Geometric Sans')",
+        "bodyFont": "Specific body font family (e.g. 'Inter', 'JetBrains Mono', 'System Sans')",
+        "scaleRatio": "Typographic scale ratio e.g. '1.25', '1.33', or '1.414'",
         "letterSpacing": "Tracking style e.g. 'tight', 'normal', 'wide-mono'"
       },
       "spacing": {
-        "baseUnit": "Base grid spacing unit e.g. '4px', '8px', '12px'",
+        "baseUnit": "Base grid unit e.g. '4px', '8px', '12px'",
         "density": "'compact', 'comfortable', or 'spacious'"
       },
       "shape": {
-        "borderRadius": "Main container border radius e.g. '0px', '4px', '12px', '9999px'",
-        "borderStyle": "Border treatment e.g. '1px solid rgba(255,255,255,0.1)', '2px solid #000', 'none'"
+        "borderRadius": "Container border radius e.g. '0px', '4px', '12px', '24px'",
+        "borderStyle": "Border style e.g. '1px solid rgba(255,255,255,0.1)', '1px solid #333', 'none'"
       }
     },
     "visualEffects": {
       "glassmorphism": {
         "enabled": true or false,
-        "blurRadius": "Blur amount e.g. '12px' or '0px'",
-        "transparency": "Surface transparency e.g. '0.85' or '1.0'"
+        "blurRadius": "e.g. '12px' or '0px'",
+        "transparency": "e.g. '0.85' or '1.0'"
       },
       "textureField": {
         "enabled": true or false,
@@ -110,7 +114,7 @@ Generate the output matching this exact JSON schema:
     const data = await response.json();
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawText) {
-      return Response.json({ error: "Empty response received from AI model." }, { status: 500 });
+      return Response.json({ error: "Empty response received from Gemini AI model." }, { status: 500 });
     }
 
     const parsedDNA = JSON.parse(rawText);
