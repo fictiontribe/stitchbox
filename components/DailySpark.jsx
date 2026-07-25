@@ -10,9 +10,9 @@ export default function DailySpark({ dailySpark, generateNewSpark, onApplySpark 
       <div className="flex items-start gap-3">
         <div className="bg-indigo-500 text-white p-1.5 rounded-md text-xs font-bold font-mono mt-0.5 shadow-md shadow-indigo-950">SPARK</div>
         <div>
-          <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400">Proactive Inspiration Challenge</h4>
+          <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400">INSPIRATION CHALLENGE</h4>
           <p className="text-xs text-slate-200 mt-0.5">
-            Generate <button onClick={onApplySpark} title="Click to apply as target subject" className="text-indigo-300 font-semibold underline decoration-indigo-500/50 hover:text-white transition">"{dailySpark.subject}"</button> using <span className="text-indigo-300 font-semibold">{dailySpark.style}</span>.
+            Generate <button onClick={onApplySpark} title="Click to apply subject and style to prompt generator" className="text-indigo-300 font-semibold underline decoration-indigo-500/50 hover:text-white transition">"{dailySpark.subject}"</button> using <span className="text-indigo-300 font-semibold">{dailySpark.style}</span>.
           </p>
         </div>
       </div>

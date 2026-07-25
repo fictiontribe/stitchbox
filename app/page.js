@@ -51,14 +51,32 @@ export default function Home() {
 
       const syncDatabase = async () => {
         try {
-          const storedItems = await getAllLibraryItems();
-          if (storedItems && storedItems.length > 0) {
-            const storedIds = new Set(storedItems.map(i => i.id));
-            const initialRemaining = INITIAL_LIBRARY.filter(i => !storedIds.has(i.id));
-            setLibrary([...storedItems, ...initialRemaining]);
+          // Fetch shared items from server API so uploaded assets persist across users
+          const res = await fetch('/api/library');
+          const data = await res.json().catch(() => ({}));
+          const serverItems = (data && data.success && Array.isArray(data.items)) ? data.items : [];
+
+          const localItems = await getAllLibraryItems();
+
+          const itemMap = new Map();
+          [...serverItems, ...localItems].forEach(item => {
+            if (item && item.id) itemMap.set(item.id, item);
+          });
+
+          const combined = Array.from(itemMap.values());
+          setLibrary(combined);
+
+          if (serverItems.length === 0 && localItems.length > 0) {
+            for (const item of localItems) {
+              fetch('/api/library', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(item)
+              }).catch(() => {});
+            }
           }
         } catch (err) {
-          console.error('Failed to load from IndexedDB:', err);
+          console.error('Failed to sync library database:', err);
         }
       };
       syncDatabase();
@@ -104,11 +122,14 @@ export default function Home() {
 
   const onApplySpark = () => {
     if (dailySpark?.subject) {
-      setCustomSubject(dailySpark.subject);
+      if (dailySpark.style) {
+        setCustomSubject(`${dailySpark.subject} using ${dailySpark.style}`);
+      } else {
+        setCustomSubject(dailySpark.subject);
+      }
     }
   };
 
-  // 1. Dynamic base tags generated directly from board assets
   const allBaseTags = useMemo(() => {
     const tagSet = new Set();
     library.forEach(item => {
@@ -123,7 +144,6 @@ export default function Home() {
     return Array.from(tagSet);
   }, [library, customTags]);
 
-  // 2. Dynamic vocabulary / sub-tags generated directly from board assets for active base tag
   const currentSubTags = useMemo(() => {
     if (!activeBaseTag) return [];
     const tokenSet = new Set();
@@ -193,6 +213,12 @@ export default function Home() {
   const handleDeleteItem = async (id) => {
     setLibrary(prev => prev.filter(item => item.id !== id));
     await deleteLibraryItem(id);
+    fetch('/api/library', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    }).catch(() => {});
+
     if (selectedItem?.id === id) setSelectedItem(null);
     if (blendSlotA === id) setBlendSlotA(null);
     if (blendSlotB === id) setBlendSlotB(null);
@@ -242,6 +268,12 @@ export default function Home() {
 
       setLibrary(prev => [newDnaItem, ...prev]);
       await saveLibraryItem(newDnaItem);
+      fetch('/api/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDnaItem)
+      }).catch(() => {});
+
       setSelectedItem(newDnaItem);
     } catch (error) {
       console.error("Upload Parsing Error: ", error);
@@ -303,6 +335,12 @@ export default function Home() {
 
       setLibrary(prev => [newDnaItem, ...prev]);
       await saveLibraryItem(newDnaItem);
+      fetch('/api/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDnaItem)
+      }).catch(() => {});
+
       setSelectedItem(newDnaItem);
     } catch (error) {
       console.error("URL Capture Error: ", error);
