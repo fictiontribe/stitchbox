@@ -31,6 +31,33 @@ export const fileToBase64 = (file) => new Promise((resolve, reject) => {
   reader.onerror = error => reject(error);
 });
 
+export const compressImageDataUrl = (dataUrl, maxWidth = 1000, quality = 0.82) => {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !dataUrl || !dataUrl.startsWith('data:image')) {
+      return resolve(dataUrl);
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = dataUrl;
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressed = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressed);
+    };
+    img.onerror = () => resolve(dataUrl);
+  });
+};
+
 export const compileStitchPrompt = (item, subject) => {
   const ds = item.recipe?.designSystem || {};
   const colors = ds.color || {};
@@ -87,7 +114,12 @@ export const fetchUrlScreenshot = async (url) => {
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
     cleanUrl = 'https://' + cleanUrl;
   }
-  const domain = new URL(cleanUrl).hostname;
+  let domain = cleanUrl;
+  try {
+    domain = new URL(cleanUrl).hostname;
+  } catch (e) {
+    domain = cleanUrl.replace(/^https?:\/\//, '').split('/')[0];
+  }
   const screenshotUrl = `https://image.thum.io/get/width/1200/crop/800/noanimate/${cleanUrl}`;
   return {
     screenshotUrl,

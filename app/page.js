@@ -8,7 +8,8 @@ import {
   fileToBase64,
   compileStitchPrompt,
   fetchUrlScreenshot,
-  imageUrlToBase64
+  imageUrlToBase64,
+  compressImageDataUrl
 } from '../data/seedData';
 
 import {
@@ -78,6 +79,9 @@ export default function Home() {
           // 4. Auto-push any local items to Cloudflare KV so all team members see them immediately
           if (localItems && localItems.length > 0) {
             for (const item of localItems) {
+              if (item.imageUrl && item.imageUrl.startsWith('data:image')) {
+                item.imageUrl = await compressImageDataUrl(item.imageUrl);
+              }
               fetch('/api/library', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -106,6 +110,9 @@ export default function Home() {
 
       let count = 0;
       for (const item of allToSync) {
+        if (item.imageUrl && item.imageUrl.startsWith('data:image')) {
+          item.imageUrl = await compressImageDataUrl(item.imageUrl);
+        }
         const res = await fetch('/api/library', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -291,7 +298,8 @@ export default function Home() {
 
     try {
       const rawBase64 = await fileToBase64(file);
-      const persistentImageDataUrl = `data:${file.type || 'image/png'};base64,${rawBase64}`;
+      const rawDataUrl = `data:${file.type || 'image/png'};base64,${rawBase64}`;
+      const persistentImageDataUrl = await compressImageDataUrl(rawDataUrl);
 
       const parsedDNA = await runDnaExtraction(rawBase64, file.type);
 
@@ -349,7 +357,8 @@ export default function Home() {
         const res = await imageUrlToBase64(screenshotUrl);
         base64Data = res.base64;
         mimeType = res.mimeType || 'image/png';
-        persistentImageUrl = `data:${mimeType};base64,${base64Data}`;
+        const rawDataUrl = `data:${mimeType};base64,${base64Data}`;
+        persistentImageUrl = await compressImageDataUrl(rawDataUrl);
       } catch (e) {
         console.warn('Could not convert image to base64 data URL, storing CDN URL:', e);
       }

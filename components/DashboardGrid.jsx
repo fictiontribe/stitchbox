@@ -11,21 +11,21 @@ export default function DashboardGrid({
   handleDeleteItem
 }) {
   return (
-    <main className="px-8 py-8">
+    <main className="px-4 sm:px-8 py-6 sm:py-8">
       {isProcessing && (
-        <div className="mb-8 p-6 bg-slate-900/90 border border-indigo-500/50 rounded-xl flex items-center justify-between animate-pulse glass-panel shadow-2xl">
+        <div className="mb-8 p-4 sm:p-6 bg-slate-900/90 border border-indigo-500/50 rounded-xl flex items-center justify-between animate-pulse glass-panel shadow-2xl">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-950/80 rounded-lg border border-indigo-800/50"></div>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-950/80 rounded-lg border border-indigo-800/50"></div>
             <div>
-              <p className="text-sm font-semibold text-indigo-200">Analyzing Visual Assets with Gemini 2.0 Flash...</p>
-              <p className="text-xs text-slate-400">Extracting structural properties, generating layout guidelines and rulesets</p>
+              <p className="text-xs sm:text-sm font-semibold text-indigo-200">Analyzing Visual Assets with Gemini 2.0 Flash...</p>
+              <p className="text-[10px] sm:text-xs text-slate-400">Extracting structural properties, generating layout guidelines and rulesets</p>
             </div>
           </div>
-          <div className="w-6 h-6 border-2 border-t-transparent border-indigo-400 rounded-full animate-spin"></div>
+          <div className="w-5 h-5 sm:w-6 sm:h-6 border-2 border-t-transparent border-indigo-400 rounded-full animate-spin"></div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-8">
         {filteredLibrary.map((item) => (
           <article key={item.id} className="flex flex-col group cursor-pointer relative" onClick={() => setSelectedItem(item)}>
             <div className="relative aspect-[4/3] bg-slate-900 rounded-xl border border-slate-800 overflow-hidden group-hover:border-indigo-500/80 transition duration-300 shadow-lg">
