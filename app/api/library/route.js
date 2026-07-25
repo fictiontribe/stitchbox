@@ -5,10 +5,15 @@ export const runtime = 'edge';
 function getKvBinding() {
   try {
     const ctx = getRequestContext();
-    return ctx?.env?.STITCHBOX_KV || process.env.STITCHBOX_KV;
-  } catch (e) {
-    return process.env.STITCHBOX_KV;
+    if (ctx && ctx.env && ctx.env.STITCHBOX_KV) {
+      return ctx.env.STITCHBOX_KV;
+    }
+  } catch (e) {}
+
+  if (typeof STITCHBOX_KV !== 'undefined') {
+    return STITCHBOX_KV;
   }
+  return process.env.STITCHBOX_KV;
 }
 
 export async function GET() {

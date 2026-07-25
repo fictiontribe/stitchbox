@@ -43,6 +43,8 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [syncSuccessMsg, setSyncSuccessMsg] = useState('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -51,28 +53,36 @@ export default function Home() {
 
       const syncDatabase = async () => {
         try {
-          // Fetch persistent shared items from Cloudflare KV
+          // 1. Fetch local items stored in user's browser IndexedDB
+          const localItems = await getAllLibraryItems();
+
+          // 2. Fetch server items stored in Cloudflare KV
           const res = await fetch('/api/library');
           const data = await res.json().catch(() => ({}));
           const serverItems = (data && data.success && Array.isArray(data.items)) ? data.items : [];
 
-          if (serverItems.length > 0) {
-            setLibrary(serverItems);
-            for (const item of serverItems) {
-              await saveLibraryItem(item);
-            }
-          } else {
-            // If KV is empty, check local IndexedDB
-            const localItems = await getAllLibraryItems();
-            if (localItems && localItems.length > 0) {
-              setLibrary(localItems);
-              for (const item of localItems) {
-                fetch('/api/library', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(item)
-                }).catch(() => {});
-              }
+          // 3. Merge local + server items so no cards are lost
+          const itemMap = new Map();
+
+          if (Array.isArray(localItems)) {
+            localItems.forEach(i => { if (i && i.id) itemMap.set(i.id, i); });
+          }
+
+          if (Array.isArray(serverItems)) {
+            serverItems.forEach(i => { if (i && i.id) itemMap.set(i.id, i); });
+          }
+
+          const combined = Array.from(itemMap.values());
+          setLibrary(combined);
+
+          // 4. Auto-push any local items to Cloudflare KV so all team members see them immediately
+          if (localItems && localItems.length > 0) {
+            for (const item of localItems) {
+              fetch('/api/library', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(item)
+              }).catch(() => {});
             }
           }
         } catch (err) {
@@ -82,6 +92,36 @@ export default function Home() {
       syncDatabase();
     }
   }, []);
+
+  const handleSyncToCloud = async () => {
+    setIsSyncingCloud(true);
+    setSyncSuccessMsg('');
+    try {
+      const localItems = await getAllLibraryItems();
+      const itemMap = new Map();
+      library.forEach(i => { if (i && i.id) itemMap.set(i.id, i); });
+      localItems.forEach(i => { if (i && i.id) itemMap.set(i.id, i); });
+
+      const allToSync = Array.from(itemMap.values());
+
+      let count = 0;
+      for (const item of allToSync) {
+        const res = await fetch('/api/library', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        });
+        if (res.ok) count++;
+      }
+
+      setSyncSuccessMsg(`Synced ${count} card${count === 1 ? '' : 's'} to Cloud!`);
+      setTimeout(() => setSyncSuccessMsg(''), 4000);
+    } catch (err) {
+      console.error("Manual cloud sync error:", err);
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
 
   useEffect(() => {
     generateNewSpark();
@@ -476,6 +516,9 @@ export default function Home() {
           urlInput={urlInput}
           setUrlInput={setUrlInput}
           isProcessing={isProcessing}
+          handleSyncToCloud={handleSyncToCloud}
+          isSyncingCloud={isSyncingCloud}
+          syncSuccessMsg={syncSuccessMsg}
         />
 
         <NoticeBanners
