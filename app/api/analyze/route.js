@@ -30,48 +30,14 @@ export async function POST(request) {
       return Response.json({ error: "Missing imageBase64 parameter." }, { status: 400 });
     }
 
-    // Explicit model candidate priority strictly targeting Gemini 2.5 Flash-Lite first
-    const preferredCandidates = [
-      "models/gemini-2.5-flash-lite",
-      "models/gemini-2.5-flash-lite-preview",
-      "models/gemini-2.5-flash-lite-001",
-      "models/gemini-2.5-flash",
-      "models/gemini-2.0-flash-lite",
+    // Active, versioned Gemini 2.0 & newer model strings supported by Google AI Studio
+    const candidateModels = [
       "models/gemini-2.0-flash-lite-preview-02-05",
-      "models/gemini-2.0-flash"
+      "models/gemini-2.0-flash-lite-preview",
+      "models/gemini-2.0-flash-exp",
+      "models/gemini-2.0-flash-thinking-exp-01-21",
+      "models/gemini-2.0-pro-exp-01-15"
     ];
-
-    // 1. Discover models directly from Google AI Studio ListModels API for this specific key
-    let candidateModels = preferredCandidates;
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (listRes.ok) {
-        const listData = await listRes.json();
-        if (Array.isArray(listData.models)) {
-          const activeList = listData.models
-            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
-            .map(m => m.name);
-
-          // If ListModels returned valid endpoints, merge preferred candidates with active list
-          const activeCandidates = preferredCandidates.filter(m => activeList.includes(m));
-          if (activeCandidates.length > 0) {
-            candidateModels = activeCandidates;
-          } else if (activeList.length > 0) {
-            candidateModels = activeList;
-          }
-        }
-      }
-    } catch (err) {
-      // Use preferredCandidates fallback
-    }
 
     // Format existing collection context if provided
     let collectionContext = "";
@@ -80,7 +46,7 @@ export async function POST(request) {
       collectionContext = `\n\nCURRENT COLLECTION CONTEXT:\nThe board currently contains the following assets:\n${itemSummaries}\nAnalyze the uploaded image in relation to the collection above so that generated baseTags reflect and categorize this item accurately within the overall collection taxonomy.`;
     }
 
-    const systemPrompt = `You are the design intelligence engine for StitchBox operating on Gemini 2.5 Flash-Lite. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
+    const systemPrompt = `You are the design intelligence engine for StitchBox operating on Gemini 2.0 Flash-Lite. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
 
 Examine the screenshot with high fidelity:
 - Sample exact dominant color hex values for surface background, cards, primary headlines, accent buttons, and body typography.
@@ -197,7 +163,7 @@ Generate the output matching this exact JSON schema:
 
     if (!parsedDNA) {
       return Response.json({ 
-        error: `Gemini API call failed (${candidateModels.join(', ')}). Last error: ${lastError}` 
+        error: `Gemini API call failed using Gemini 2.0 models (${candidateModels.join(', ')}). Last error: ${lastError}` 
       }, { status: 500 });
     }
 
