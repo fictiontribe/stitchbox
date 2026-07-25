@@ -30,13 +30,13 @@ export async function POST(request) {
       return Response.json({ error: "Missing imageBase64 parameter." }, { status: 400 });
     }
 
-    // Active, versioned Gemini 2.0 & newer model strings supported by Google AI Studio
+    // Explicit model candidate priority starting with gemini-flash-lite-latest
     const candidateModels = [
+      "models/gemini-flash-lite-latest",
       "models/gemini-2.0-flash-lite-preview-02-05",
       "models/gemini-2.0-flash-lite-preview",
       "models/gemini-2.0-flash-exp",
-      "models/gemini-2.0-flash-thinking-exp-01-21",
-      "models/gemini-2.0-pro-exp-01-15"
+      "models/gemini-1.5-flash-8b"
     ];
 
     // Format existing collection context if provided
@@ -46,7 +46,7 @@ export async function POST(request) {
       collectionContext = `\n\nCURRENT COLLECTION CONTEXT:\nThe board currently contains the following assets:\n${itemSummaries}\nAnalyze the uploaded image in relation to the collection above so that generated baseTags reflect and categorize this item accurately within the overall collection taxonomy.`;
     }
 
-    const systemPrompt = `You are the design intelligence engine for StitchBox operating on Gemini 2.0 Flash-Lite. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
+    const systemPrompt = `You are the design intelligence engine for StitchBox operating on Gemini Flash-Lite Latest. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
 
 Examine the screenshot with high fidelity:
 - Sample exact dominant color hex values for surface background, cards, primary headlines, accent buttons, and body typography.
@@ -163,7 +163,7 @@ Generate the output matching this exact JSON schema:
 
     if (!parsedDNA) {
       return Response.json({ 
-        error: `Gemini API call failed using Gemini 2.0 models (${candidateModels.join(', ')}). Last error: ${lastError}` 
+        error: `Gemini API call failed (${candidateModels.join(', ')}). Last error: ${lastError}` 
       }, { status: 500 });
     }
 
