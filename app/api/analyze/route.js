@@ -19,7 +19,7 @@ export async function POST(request) {
 
     if (!apiKey) {
       return Response.json({ 
-        error: "GEMINI_API_KEY environment variable is not configured. Please add GEMINI_API_KEY in Cloudflare Pages Settings -> Environment Variables/Secrets (or .env.local for local development)." 
+        error: "GEMINI_API_KEY environment variable is not configured. Please add GEMINI_API_KEY in Cloudflare Pages Settings -> Environment Variables/Secrets." 
       }, { status: 500 });
     }
 
@@ -28,6 +28,44 @@ export async function POST(request) {
 
     if (!imageBase64) {
       return Response.json({ error: "Missing imageBase64 parameter." }, { status: 400 });
+    }
+
+    // 1. Dynamically query Google AI Studio ListModels to discover currently supported models for this key
+    let availableModelNames = [];
+    let listModelsError = null;
+
+    try {
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        if (Array.isArray(listData.models)) {
+          availableModelNames = listData.models
+            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
+            .map(m => m.name); // e.g. ["models/gemini-1.5-flash", "models/gemini-1.5-pro", ...]
+        }
+      } else {
+        listModelsError = await listRes.text();
+      }
+    } catch (err) {
+      listModelsError = err.message;
+    }
+
+    // Fallback list of model full names if ListModels fetch failed
+    if (availableModelNames.length === 0) {
+      availableModelNames = [
+        "models/gemini-1.5-flash",
+        "models/gemini-1.5-flash-latest",
+        "models/gemini-1.5-pro",
+        "models/gemini-1.5-pro-latest",
+        "models/gemini-2.0-flash-exp"
+      ];
+    } else {
+      // Sort models to prioritize Flash models first, then Pro models
+      availableModelNames.sort((a, b) => {
+        if (a.includes('flash') && !b.includes('flash')) return -1;
+        if (!a.includes('flash') && b.includes('flash')) return 1;
+        return 0;
+      });
     }
 
     const systemPrompt = `You are the design intelligence engine for StitchBox. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.
@@ -111,18 +149,11 @@ Generate the output matching this exact JSON schema:
       }
     };
 
-    const candidateModels = [
-      "gemini-2.5-flash",
-      "gemini-1.5-flash",
-      "gemini-2.5-pro",
-      "gemini-1.5-pro"
-    ];
-
     let lastError = null;
     let parsedDNA = null;
 
-    for (const modelName of candidateModels) {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    for (const fullModelPath of availableModelNames) {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/${fullModelPath}:generateContent?key=${apiKey}`;
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -137,18 +168,18 @@ Generate the output matching this exact JSON schema:
             parsedDNA = JSON.parse(rawText);
             break;
           } catch (e) {
-            lastError = `Failed to parse JSON response from ${modelName}`;
+            lastError = `Failed to parse JSON output from ${fullModelPath}`;
           }
         }
       } else {
         const errText = await response.text();
-        lastError = `Model ${modelName} returned status ${response.status}: ${errText}`;
+        lastError = `${fullModelPath} returned status ${response.status}: ${errText}`;
       }
     }
 
     if (!parsedDNA) {
       return Response.json({ 
-        error: `Gemini API error across candidate models: ${lastError}` 
+        error: `Gemini API call failed across available models (${availableModelNames.join(', ')}). Last error: ${lastError || listModelsError}` 
       }, { status: 500 });
     }
 
