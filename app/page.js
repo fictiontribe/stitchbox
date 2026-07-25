@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 
 import {
-  INITIAL_LIBRARY,
   TAG_RELATIONS,
   fileToBase64,
   compileStitchPrompt,
@@ -13,9 +12,6 @@ import {
 } from '../data/seedData';
 
 import {
-  getAllLibraryItems,
-  saveLibraryItem,
-  deleteLibraryItem,
   getCustomBaseTags,
   saveCustomBaseTag
 } from '../data/dbStorage';
@@ -44,91 +40,27 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
-  const [syncSuccessMsg, setSyncSuccessMsg] = useState('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const loadedTags = getCustomBaseTags();
       setCustomTags(loadedTags);
 
-      const syncDatabase = async () => {
+      // Load native shared board items from Cloudflare KV
+      const fetchCloudLibrary = async () => {
         try {
-          // 1. Fetch local items stored in user's browser IndexedDB
-          const localItems = await getAllLibraryItems();
-
-          // 2. Fetch server items stored in Cloudflare KV
           const res = await fetch('/api/library');
           const data = await res.json().catch(() => ({}));
-          const serverItems = (data && data.success && Array.isArray(data.items)) ? data.items : [];
-
-          // 3. Merge local + server items so no cards are lost
-          const itemMap = new Map();
-
-          if (Array.isArray(localItems)) {
-            localItems.forEach(i => { if (i && i.id) itemMap.set(i.id, i); });
-          }
-
-          if (Array.isArray(serverItems)) {
-            serverItems.forEach(i => { if (i && i.id) itemMap.set(i.id, i); });
-          }
-
-          const combined = Array.from(itemMap.values());
-          setLibrary(combined);
-
-          // 4. Auto-push any local items to Cloudflare KV so all team members see them immediately
-          if (localItems && localItems.length > 0) {
-            for (const item of localItems) {
-              if (item.imageUrl && item.imageUrl.startsWith('data:image')) {
-                item.imageUrl = await compressImageDataUrl(item.imageUrl);
-              }
-              fetch('/api/library', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(item)
-              }).catch(() => {});
-            }
+          if (data && data.success && Array.isArray(data.items)) {
+            setLibrary(data.items);
           }
         } catch (err) {
-          console.error('Failed to sync library database:', err);
+          console.error('Failed to fetch Cloud library:', err);
         }
       };
-      syncDatabase();
+      fetchCloudLibrary();
     }
   }, []);
-
-  const handleSyncToCloud = async () => {
-    setIsSyncingCloud(true);
-    setSyncSuccessMsg('');
-    try {
-      const localItems = await getAllLibraryItems();
-      const itemMap = new Map();
-      library.forEach(i => { if (i && i.id) itemMap.set(i.id, i); });
-      localItems.forEach(i => { if (i && i.id) itemMap.set(i.id, i); });
-
-      const allToSync = Array.from(itemMap.values());
-
-      let count = 0;
-      for (const item of allToSync) {
-        if (item.imageUrl && item.imageUrl.startsWith('data:image')) {
-          item.imageUrl = await compressImageDataUrl(item.imageUrl);
-        }
-        const res = await fetch('/api/library', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item)
-        });
-        if (res.ok) count++;
-      }
-
-      setSyncSuccessMsg(`Synced ${count} card${count === 1 ? '' : 's'} to Cloud!`);
-      setTimeout(() => setSyncSuccessMsg(''), 4000);
-    } catch (err) {
-      console.error("Manual cloud sync error:", err);
-    } finally {
-      setIsSyncingCloud(false);
-    }
-  };
 
   useEffect(() => {
     generateNewSpark();
@@ -259,7 +191,6 @@ export default function Home() {
 
   const handleDeleteItem = async (id) => {
     setLibrary(prev => prev.filter(item => item.id !== id));
-    await deleteLibraryItem(id);
     fetch('/api/library', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -292,6 +223,25 @@ export default function Home() {
     };
   };
 
+  const saveToCloudNative = async (item) => {
+    try {
+      const res = await fetch('/api/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && Array.isArray(data.items)) {
+        setLibrary(data.items);
+      } else {
+        setLibrary(prev => [item, ...prev.filter(i => i.id !== item.id)]);
+      }
+    } catch (err) {
+      console.error("Native Cloud Save Error:", err);
+      setLibrary(prev => [item, ...prev.filter(i => i.id !== item.id)]);
+    }
+  };
+
   const processImageFile = async (file) => {
     setIsProcessing(true);
     setApiError(null);
@@ -314,16 +264,7 @@ export default function Home() {
         recipe: parsedDNA.recipe
       };
 
-      setLibrary(prev => [newDnaItem, ...prev]);
-      await saveLibraryItem(newDnaItem);
-
-      // Save item globally to Cloudflare KV
-      await fetch('/api/library', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newDnaItem)
-      }).catch(err => console.error("Failed to save item to Cloudflare KV:", err));
-
+      await saveToCloudNative(newDnaItem);
       setSelectedItem(newDnaItem);
     } catch (error) {
       console.error("Upload Parsing Error: ", error);
@@ -384,16 +325,7 @@ export default function Home() {
         recipe: parsedDNA.recipe
       };
 
-      setLibrary(prev => [newDnaItem, ...prev]);
-      await saveLibraryItem(newDnaItem);
-
-      // Save item globally to Cloudflare KV
-      await fetch('/api/library', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newDnaItem)
-      }).catch(err => console.error("Failed to save item to Cloudflare KV:", err));
-
+      await saveToCloudNative(newDnaItem);
       setSelectedItem(newDnaItem);
     } catch (error) {
       console.error("URL Capture Error: ", error);
@@ -525,9 +457,6 @@ export default function Home() {
           urlInput={urlInput}
           setUrlInput={setUrlInput}
           isProcessing={isProcessing}
-          handleSyncToCloud={handleSyncToCloud}
-          isSyncingCloud={isSyncingCloud}
-          syncSuccessMsg={syncSuccessMsg}
         />
 
         <NoticeBanners

@@ -7,13 +7,10 @@ export default function Header({
   handleUrlIngest,
   urlInput,
   setUrlInput,
-  isProcessing,
-  handleSyncToCloud,
-  isSyncingCloud,
-  syncSuccessMsg
+  isProcessing
 }) {
   return (
-    <header className="border-b border-slate-800/80 px-8 py-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 glass-panel sticky top-0 z-30">
+    <header className="border-b border-slate-800/80 px-4 sm:px-8 py-4 sm:py-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 glass-panel sticky top-0 z-30">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2 font-display">
           STITCHBOX <span className="text-xs bg-indigo-950/80 text-indigo-300 border border-indigo-800/50 px-2 py-0.5 font-mono uppercase tracking-widest rounded-md">Design DNA</span>
@@ -22,22 +19,6 @@ export default function Header({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-        {syncSuccessMsg && (
-          <span className="text-xs font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-3 py-1.5 rounded-lg animate-pulse">
-            {syncSuccessMsg}
-          </span>
-        )}
-
-        <button
-          type="button"
-          onClick={handleSyncToCloud}
-          disabled={isSyncingCloud || isProcessing}
-          className="bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-200 px-3.5 py-2 rounded-lg transition font-mono text-xs font-semibold flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50"
-          title="Push all local cards to the shared Cloudflare KV cloud storage for your team"
-        >
-          <span>{isSyncingCloud ? 'Syncing...' : 'Push Local Cards to Cloud ☁️'}</span>
-        </button>
-
         <div className="relative group flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg cursor-pointer transition font-mono text-xs font-semibold shadow-lg shadow-indigo-950/30">
           <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileUpload} disabled={isProcessing} />
           <span>Upload Screenshot</span>
