@@ -30,18 +30,25 @@ export async function POST(request) {
       return Response.json({ error: "Missing imageBase64 parameter." }, { status: 400 });
     }
 
-    // 1. Dynamically query Google AI Studio ListModels to discover currently supported models for this key
-    let availableModelNames = [];
+    // 1. Dynamically query Google AI Studio ListModels to discover valid active models
+    let activeModels = [];
     let listModelsError = null;
 
     try {
-      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
       if (listRes.ok) {
         const listData = await listRes.json();
         if (Array.isArray(listData.models)) {
-          availableModelNames = listData.models
+          activeModels = listData.models
             .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
-            .map(m => m.name); // e.g. ["models/gemini-2.5-flash-lite", "models/gemini-2.0-flash", ...]
+            .map(m => m.name); // e.g. ["models/gemini-2.0-flash-lite", "models/gemini-2.0-flash", "models/gemini-1.5-flash"]
         }
       } else {
         listModelsError = await listRes.text();
@@ -50,47 +57,42 @@ export async function POST(request) {
       listModelsError = err.message;
     }
 
-    // Explicit model priority list starting with gemini-2.5-flash-lite
-    const preferredOrder = [
-      "models/gemini-2.5-flash-lite",
-      "models/gemini-2.5-flash-lite-latest",
-      "models/gemini-2.5-flash",
+    // Standard valid fallback model names if ListModels fetch failed or was empty
+    const defaultFallbackModels = [
       "models/gemini-2.0-flash-lite",
-      "models/gemini-2.0-flash-lite-preview-02-05",
       "models/gemini-2.0-flash",
-      "models/gemini-2.0-flash-exp",
-      "models/gemini-1.5-flash",
-      "models/gemini-1.5-flash-latest"
+      "models/gemini-1.5-flash"
     ];
 
-    if (availableModelNames.length === 0) {
-      availableModelNames = preferredOrder;
-    } else {
-      // Sort models according to preferredOrder, pushing unrecognized models to the end
-      availableModelNames.sort((a, b) => {
-        const idxA = preferredOrder.indexOf(a);
-        const idxB = preferredOrder.indexOf(b);
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return 0;
-      });
-      // Always ensure preferred models are attempted first
-      preferredOrder.forEach(model => {
-        if (!availableModelNames.includes(model)) {
-          availableModelNames.unshift(model);
-        }
-      });
-    }
+    let candidateModels = activeModels.length > 0 ? activeModels : defaultFallbackModels;
+
+    // Prioritize Flash Lite -> Flash -> 1.5 Flash among valid models
+    const preference = [
+      "flash-lite",
+      "2.0-flash",
+      "1.5-flash",
+      "flash"
+    ];
+
+    candidateModels.sort((a, b) => {
+      const scoreA = preference.findIndex(p => a.includes(p));
+      const scoreB = preference.findIndex(p => b.includes(p));
+      const valA = scoreA === -1 ? 99 : scoreA;
+      const valB = scoreB === -1 ? 99 : scoreB;
+      return valA - valB;
+    });
+
+    // Limit to top 2 valid candidate models to avoid any long latency loops
+    candidateModels = candidateModels.slice(0, 2);
 
     // Format existing collection context if provided
     let collectionContext = "";
     if (Array.isArray(existingItems) && existingItems.length > 0) {
-      const itemSummaries = existingItems.map(item => `- "${item.creativeName || 'Asset'}": Tags=[${(item.baseTags || []).join(', ')}], Tokens=[${(item.tokens || []).slice(0, 5).join(', ')}]`).join('\n');
-      collectionContext = `\n\nCURRENT COLLECTION CONTEXT:\nThe board currently contains the following assets:\n${itemSummaries}\nAnalyze the uploaded image in relation to the current collection above so that generated baseTags reflect and categorize this item accurately within the overall collection taxonomy.`;
+      const itemSummaries = existingItems.slice(0, 8).map(item => `- "${item.creativeName || 'Asset'}": Tags=[${(item.baseTags || []).join(', ')}], Tokens=[${(item.tokens || []).slice(0, 4).join(', ')}]`).join('\n');
+      collectionContext = `\n\nCURRENT COLLECTION CONTEXT:\nThe board currently contains the following assets:\n${itemSummaries}\nAnalyze the uploaded image in relation to the collection above so that generated baseTags reflect and categorize this item accurately within the overall collection taxonomy.`;
     }
 
-    const systemPrompt = `You are the design intelligence engine for StitchBox operating on Gemini 2.5 Flash-Lite. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
+    const systemPrompt = `You are the design intelligence engine for StitchBox. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
 
 Examine the screenshot with high fidelity:
 - Sample exact dominant color hex values for surface background, cards, primary headlines, accent buttons, and body typography.
@@ -175,34 +177,39 @@ Generate the output matching this exact JSON schema:
     let lastError = null;
     let parsedDNA = null;
 
-    for (const fullModelPath of availableModelNames) {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/${fullModelPath}:generateContent?key=${apiKey}`;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geminiPayload)
-      });
+    for (const fullModelPath of candidateModels) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout max per model call
 
-      if (response.ok) {
-        const data = await response.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/${fullModelPath}:generateContent?key=${apiKey}`;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(geminiPayload),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (rawText) {
             parsedDNA = JSON.parse(rawText);
             break;
-          } catch (e) {
-            lastError = `Failed to parse JSON output from ${fullModelPath}`;
           }
+        } else {
+          const errText = await response.text();
+          lastError = `${fullModelPath} returned HTTP ${response.status}: ${errText}`;
         }
-      } else {
-        const errText = await response.text();
-        lastError = `${fullModelPath} returned status ${response.status}: ${errText}`;
+      } catch (err) {
+        lastError = `${fullModelPath} call failed: ${err.message}`;
       }
     }
 
     if (!parsedDNA) {
       return Response.json({ 
-        error: `Gemini API call failed across available models (${availableModelNames.join(', ')}). Last error: ${lastError || listModelsError}` 
+        error: `Gemini API call failed across candidate models (${candidateModels.join(', ')}). Last error: ${lastError || listModelsError}` 
       }, { status: 500 });
     }
 
