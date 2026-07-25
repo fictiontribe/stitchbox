@@ -30,14 +30,65 @@ export async function POST(request) {
       return Response.json({ error: "Missing imageBase64 parameter." }, { status: 400 });
     }
 
-    // Candidate models strictly starting with user's requested paid model: gemini-2.5-flash-lite
-    const candidateModels = [
-      "models/gemini-2.5-flash-lite",
-      "models/gemini-2.5-flash-lite-latest",
-      "models/gemini-2.5-flash",
-      "models/gemini-2.0-flash-lite",
-      "models/gemini-2.0-flash"
-    ];
+    // 1. Discover active models directly from Google AI Studio for this specific API key
+    let candidateModels = [];
+    let listModelsError = null;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        if (Array.isArray(listData.models)) {
+          const supported = listData.models
+            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
+            .map(m => m.name); // e.g. ["models/gemini-1.5-flash", "models/gemini-1.5-flash-8b", "models/gemini-2.0-flash-exp"]
+
+          // Sort by user preference: 2.5-flash-lite -> 2.0-flash -> 1.5-flash-8b -> 1.5-flash
+          const prefOrder = [
+            "2.5-flash-lite",
+            "2.5-flash",
+            "2.0-flash",
+            "1.5-flash-8b",
+            "1.5-flash",
+            "1.5-pro"
+          ];
+
+          supported.sort((a, b) => {
+            const scoreA = prefOrder.findIndex(p => a.toLowerCase().includes(p));
+            const scoreB = prefOrder.findIndex(p => b.toLowerCase().includes(p));
+            const valA = scoreA === -1 ? 99 : scoreA;
+            const valB = scoreB === -1 ? 99 : scoreB;
+            return valA - valB;
+          });
+
+          candidateModels = supported;
+        }
+      } else {
+        listModelsError = await listRes.text();
+      }
+    } catch (err) {
+      listModelsError = err.message;
+    }
+
+    // Fallback if ListModels endpoint returned empty or was unreachable
+    if (candidateModels.length === 0) {
+      candidateModels = [
+        "models/gemini-1.5-flash",
+        "models/gemini-1.5-flash-8b",
+        "models/gemini-2.0-flash-exp",
+        "models/gemini-1.5-pro"
+      ];
+    }
+
+    // Limit to top 2 valid candidates to avoid latency
+    const targetModels = candidateModels.slice(0, 2);
 
     // Format existing collection context if provided
     let collectionContext = "";
@@ -46,7 +97,7 @@ export async function POST(request) {
       collectionContext = `\n\nCURRENT COLLECTION CONTEXT:\nThe board currently contains the following assets:\n${itemSummaries}\nAnalyze the uploaded image in relation to the collection above so that generated baseTags reflect and categorize this item accurately within the overall collection taxonomy.`;
     }
 
-    const systemPrompt = `You are the design intelligence engine for StitchBox operating on Gemini 2.5 Flash-Lite. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
+    const systemPrompt = `You are the design intelligence engine for StitchBox. Deconstruct the uploaded website screenshot and extract its complete Design DNA across three dimensions: Measurable Design System Tokens, Qualitative Design Style, and Visual Effects Rendering into a clean JSON object.${collectionContext}
 
 Examine the screenshot with high fidelity:
 - Sample exact dominant color hex values for surface background, cards, primary headlines, accent buttons, and body typography.
@@ -131,10 +182,10 @@ Generate the output matching this exact JSON schema:
     let lastError = null;
     let parsedDNA = null;
 
-    for (const fullModelPath of candidateModels) {
+    for (const fullModelPath of targetModels) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 18000); // 18s per attempt
+        const timeoutId = setTimeout(() => controller.abort(), 18000);
 
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/${fullModelPath}:generateContent?key=${apiKey}`;
         const response = await fetch(endpoint, {
@@ -163,7 +214,7 @@ Generate the output matching this exact JSON schema:
 
     if (!parsedDNA) {
       return Response.json({ 
-        error: `Gemini API call failed using gemini-2.5-flash-lite (${candidateModels.join(', ')}). Last error: ${lastError}` 
+        error: `Gemini API call failed (${targetModels.join(', ')}). Last error: ${lastError || listModelsError}` 
       }, { status: 500 });
     }
 
