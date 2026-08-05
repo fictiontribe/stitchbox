@@ -26,22 +26,65 @@ function FictionTribeLogo({ className = "h-3.5 w-auto" }) {
   );
 }
 
+const NAV = [
+  { label: 'Imagology', href: 'https://imagology.fictiontribe.com' },
+  { label: 'ShotVault', href: 'https://shotvault.fictiontribe.com' },
+  { label: 'Shotcaller', href: 'https://shotcaller.fictiontribe.com' },
+  { label: 'StitchBox', href: null },
+];
+
 export default function Footer() {
   return (
-    <footer className="w-full border-t border-slate-200/80 bg-[#F4F4F2] py-8 px-6 mt-16">
-      <div className="max-w-7xl mx-auto flex items-center justify-center">
-        <a 
-          href="https://fictiontribe.com" 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="group flex items-center justify-center gap-2.5 text-slate-400 hover:text-slate-700 transition-colors focus-visible:outline-none"
-          aria-label="A product by Fiction Tribe"
+    <footer className="w-full bg-slate-900 text-white py-12 px-6 mt-16">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-wrap items-end justify-between gap-8">
+          <div>
+            <p className="font-mono text-[13px] uppercase tracking-[0.15em]">
+              スティッチボックス — StitchBox
+            </p>
+            <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-white/70">
+              Design DNA is for studying, not stealing. Capture a look, name what makes it
+              work, and blend it into something your brand can own.
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-3.5">
+            <span className="select-none font-mono text-[11px] uppercase tracking-[0.15em] text-white/55">
+              Running on Gemini 3.6 Flash
+            </span>
+            <a
+              href="https://fictiontribe.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-3 text-white/75 hover:text-white transition-colors focus-visible:outline-none"
+              aria-label="A product of Fiction Tribe"
+            >
+              <span className="select-none font-mono text-[11px] uppercase tracking-[0.18em]">
+                A product of
+              </span>
+              <FictionTribeLogo className="h-3.5 w-auto" />
+            </a>
+          </div>
+        </div>
+        <nav
+          aria-label="Fiction Tribe tools"
+          className="mt-9 flex flex-wrap gap-x-7 gap-y-3 border-t border-white/15 pt-5 font-mono text-[11px] uppercase tracking-[0.15em]"
         >
-          <span className="text-[11px] font-medium uppercase tracking-[0.18em] select-none">
-            A PRODUCT BY
-          </span>
-          <FictionTribeLogo className="h-3.5 w-auto text-slate-700 group-hover:text-slate-900 transition-colors" />
-        </a>
+          {NAV.map((item) =>
+            item.href ? (
+              <a
+                key={item.label}
+                href={item.href}
+                className="text-white/75 underline underline-offset-[3px] hover:text-white transition-colors"
+              >
+                {item.label}
+              </a>
+            ) : (
+              <span key={item.label} aria-current="page" className="text-white/45">
+                {item.label}
+              </span>
+            )
+          )}
+        </nav>
       </div>
     </footer>
   );
