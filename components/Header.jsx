@@ -7,7 +7,8 @@ export default function Header({
   handleUrlIngest,
   urlInput,
   setUrlInput,
-  isProcessing
+  isProcessing,
+  onOpenBookmarklet
 }) {
   return (
     <header className="border-b border-slate-200/90 px-4 sm:px-8 py-4 sm:py-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 glass-panel sticky top-0 z-30 shadow-sm bg-white/90">
@@ -20,6 +21,15 @@ export default function Header({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+        <button
+          type="button"
+          onClick={onOpenBookmarklet}
+          className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-2 rounded-lg transition font-mono text-xs font-bold shadow-xs border border-amber-600"
+          title="Get 1-click Bookmarklet for your browser"
+        >
+          <span>🔖 Bookmarklet</span>
+        </button>
+
         <div className="relative group flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg cursor-pointer transition font-mono text-xs font-semibold shadow-sm">
           <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileUpload} disabled={isProcessing} />
           <span>Upload Screenshot</span>

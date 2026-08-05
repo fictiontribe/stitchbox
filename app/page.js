@@ -3,13 +3,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 
 import {
-  TAG_RELATIONS,
+  CANONICAL_BASE_TAGS,
+  normalizeBaseTags,
+  getClusterVocabulary,
+  canonicalizeVocabTag,
   fileToBase64,
   compileStitchPrompt,
   fetchUrlScreenshot,
   imageUrlToBase64,
   compressImageDataUrl
 } from '../data/seedData';
+
+import { INITIAL_LIBRARY } from '../data/initialLibrary';
 
 import {
   getCustomBaseTags,
@@ -25,81 +30,202 @@ import TagFilterBar from '../components/TagFilterBar';
 import DashboardGrid from '../components/DashboardGrid';
 import BlenderConsole from '../components/BlenderConsole';
 import DetailModal from '../components/DetailModal';
+import BookmarkletModal from '../components/BookmarkletModal';
 import Footer from '../components/Footer';
 
 export default function Home() {
-  const [library, setLibrary] = useState([]);
+  // Start instantly with INITIAL_LIBRARY seed cards so 20 cards load on frame 1 (0ms blank page!)
+  const [library, setLibrary] = useState(INITIAL_LIBRARY);
+  const [isSyncingKV, setIsSyncingKV] = useState(true);
   const [customTags, setCustomTags] = useState([]);
   const [activeBaseTag, setActiveBaseTag] = useState(null);
   const [activeSubTag, setActiveSubTag] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [customSubject, setCustomSubject] = useState('an AI analytics platform for small startups');
+  const [customSubject, setCustomSubject] = useState('');
   const [copiedType, setCopiedType] = useState(null);
   const [blendSlotA, setBlendSlotA] = useState(null);
   const [blendSlotB, setBlendSlotB] = useState(null);
   const [blendedResult, setBlendedResult] = useState(null);
   const [dailySpark, setDailySpark] = useState(null);
+  const [sparkHistory, setSparkHistory] = useState([]);
+  const [isSparkLoading, setIsSparkLoading] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [apiError, setApiError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isBookmarkletOpen, setIsBookmarkletOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const loadedTags = getCustomBaseTags();
       setCustomTags(loadedTags);
 
-      // Load native shared board items from Cloudflare KV
+      // Hydrate immediately from localStorage client cache if available
+      try {
+        const cached = localStorage.getItem('stitchbox_library_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLibrary(parsed);
+          }
+        }
+      } catch (err) {
+        console.warn('LocalStorage cache read error:', err);
+      }
+
+      // Check URL query parameters for ?addUrl= or ?url= from 1-click Bookmarklet
+      const params = new URLSearchParams(window.location.search);
+      const urlToAdd = params.get('addUrl') || params.get('url');
+      if (urlToAdd) {
+        setUrlInput(urlToAdd);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        triggerBookmarkletIngest(urlToAdd);
+      }
+
+      // Load native shared board items from Cloudflare KV in the background
       const fetchCloudLibrary = async () => {
+        setIsSyncingKV(true);
         try {
           const res = await fetch('/api/library');
           const data = await res.json().catch(() => ({}));
-          if (data && data.success && Array.isArray(data.items)) {
+          if (data && data.success && Array.isArray(data.items) && data.items.length > 0) {
             setLibrary(data.items);
+            try {
+              localStorage.setItem('stitchbox_library_cache', JSON.stringify(data.items));
+            } catch (e) {}
           }
         } catch (err) {
           console.error('Failed to fetch Cloud library:', err);
+        } finally {
+          setIsSyncingKV(false);
         }
       };
       fetchCloudLibrary();
     }
   }, []);
 
+  const triggerBookmarkletIngest = async (targetUrl) => {
+    setIsProcessing(true);
+    setApiError(null);
+
+    try {
+      const { screenshotUrl, title } = await fetchUrlScreenshot(targetUrl);
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: screenshotUrl })
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success || !data.dna) {
+        throw new Error(data.error || `Server HTTP ${response.status} Error`);
+      }
+
+      const parsedDNA = data.dna;
+      const newDnaItem = {
+        id: String(Date.now()),
+        creativeName: parsedDNA.creativeName || title,
+        uploadedAt: new Date(),
+        imageUrl: screenshotUrl,
+        sourceUrl: targetUrl,
+        summary: parsedDNA.summary,
+        tokens: parsedDNA.tokens || [],
+        baseTags: parsedDNA.baseTags || ['Website'],
+        recipe: parsedDNA.recipe,
+        category: parsedDNA.category || 'Website'
+      };
+
+      await saveToCloudNative(newDnaItem);
+      setSelectedItem(newDnaItem);
+    } catch (error) {
+      console.error("Bookmarklet Ingest Error: ", error);
+      setApiError({
+        title: "Bookmarklet Analysis Error",
+        message: error.message || "Failed to analyze URL from bookmarklet.",
+        suggestion: "Ensure the URL is publicly accessible."
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   useEffect(() => {
     generateNewSpark();
   }, []);
 
-  const generateNewSpark = () => {
-    const subjects = [
+  const generateNewSpark = async () => {
+    setIsSparkLoading(true);
+
+    const fallbackSubjects = [
+      'a cybernetic fungal mycorrhizal network dashboard',
+      'an orbital space debris salvage logistics terminal',
+      'a bio-luminescent deep sea ambient sound synth',
+      'a tactile papercraft vinyl record archival portal',
+      'an autonomous drone swarm choreography interface',
+      'a quantum state superposition debug terminal',
+      'a retro-futuristic arcade flight simulator configuration suite',
+      'a geothermal volcanic energy distribution grid',
+      'a holographic spatial computing volumetric renderer',
+      'an exoplanet atmospheric spectroscopy analyzer',
+      'a brutalist concrete architectural structural simulator',
+      'a synthetic biology microbiome gene sequencer',
+      'a high-frequency algorithmic liquidity trading terminal',
+      'a vintage modular analog synthesizer patching suite',
+      'a kinetic sculpture horology clockwork CAD',
+      'a paleontology ice core climate analytics console',
+      'an urban guerilla micro-agriculture monitor',
+      'an algorithmic generative textile weaving studio',
       'a decentralized physical infrastructure protocol',
-      'a collaborative editorial editor for long-form writers',
       'a spatial developer environment for VR interfaces',
-      'an automated supply-chain accounting engine',
-      'a biotech research workflow dashboard for genomic sequencing',
-      'a high-frequency algorithmic trading terminal',
-      'a minimalist digital design agency portfolio',
-      'a real-time AI voice transcription and summarization platform',
-      'an open-source developer documentation portal',
-      'a climate analytics and carbon offset dashboard'
+      'a biotech research workflow dashboard for genomic sequencing'
     ];
-    const styles = [
+    const fallbackStyles = [
+      'Dithered Monochromatic Wireframe with Neon Cyan Accents',
       'Print-Tech Paper styling with topo-ink overlays',
-      'Dither Mono raw contrast grid rules',
       'Vast Quiet Cinematic fog borders',
       'Brutalist Monochrome typographic grid layout',
       'Neumorphic Glassmorphism glow effects',
       'Editorial Serif headlines with warm cream background',
-      'High-contrast SaaS Light Mode with vibrant accents'
+      'High-contrast SaaS Light Mode with vibrant accents',
+      'Industrial Tactical Monochrome with high-visibility yellow highlights',
+      'Retro-Futuristic CRT Raster phosphor glow',
+      'Bauhaus Minimalist geometric primary color blocking'
     ];
 
-    setDailySpark(prev => {
-      let nextSubject, nextStyle;
-      do {
-        nextSubject = subjects[Math.floor(Math.random() * subjects.length)];
-        nextStyle = styles[Math.floor(Math.random() * styles.length)];
-      } while (prev && nextSubject === prev.subject && nextStyle === prev.style);
-      return { subject: nextSubject, style: nextStyle };
-    });
+    try {
+      const res = await fetch('/api/spark', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ previousSubjects: sparkHistory })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.spark && data.spark.subject) {
+          setDailySpark(data.spark);
+          setCustomSubject(data.spark.subject);
+          setSparkHistory(prev => [...prev.slice(-20), data.spark.subject]);
+          setIsSparkLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch spark from Gemini, using fallback", err);
+    }
+
+    let nextSubject, nextStyle;
+    let attempts = 0;
+    do {
+      nextSubject = fallbackSubjects[Math.floor(Math.random() * fallbackSubjects.length)];
+      nextStyle = fallbackStyles[Math.floor(Math.random() * fallbackStyles.length)];
+      attempts++;
+    } while (attempts < 20 && (sparkHistory.includes(nextSubject) || (dailySpark && nextSubject === dailySpark.subject)));
+
+    const newSpark = { subject: nextSubject, style: nextStyle };
+    setDailySpark(newSpark);
+    setCustomSubject(nextSubject);
+    setSparkHistory(prev => [...prev.slice(-20), nextSubject]);
+    setIsSparkLoading(false);
   };
 
   const onApplySpark = () => {
@@ -113,33 +239,13 @@ export default function Home() {
   };
 
   const allBaseTags = useMemo(() => {
-    const tagSet = new Set();
-    library.forEach(item => {
-      if (Array.isArray(item.baseTags)) {
-        item.baseTags.forEach(tag => tagSet.add(tag));
-      }
-    });
-    customTags.forEach(tag => tagSet.add(tag));
-    if (tagSet.size === 0) {
-      Object.keys(TAG_RELATIONS).forEach(tag => tagSet.add(tag));
-    }
-    return Array.from(tagSet);
-  }, [library, customTags]);
+    // Guaranteed max 8 canonical Base Tags
+    return CANONICAL_BASE_TAGS;
+  }, []);
 
   const currentSubTags = useMemo(() => {
-    if (!activeBaseTag) return [];
-    const tokenSet = new Set();
-    library.forEach(item => {
-      if (item.baseTags && item.baseTags.includes(activeBaseTag)) {
-        if (Array.isArray(item.tokens)) {
-          item.tokens.forEach(tok => tokenSet.add(tok));
-        }
-      }
-    });
-    if (TAG_RELATIONS[activeBaseTag]) {
-      TAG_RELATIONS[activeBaseTag].forEach(tok => tokenSet.add(tok));
-    }
-    return Array.from(tokenSet);
+    // Guaranteed max 30 clean, ranked vocabulary tags per base cluster
+    return getClusterVocabulary(library, activeBaseTag, 30);
   }, [library, activeBaseTag]);
 
   const handleAddCustomTag = (newTag) => {
@@ -150,10 +256,16 @@ export default function Home() {
   const filteredLibrary = useMemo(() => {
     let list = [...library].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
     if (activeBaseTag) {
-      list = list.filter(item => item.baseTags && item.baseTags.includes(activeBaseTag));
+      list = list.filter(item => {
+        const itemClusters = normalizeBaseTags(item.baseTags || [item.category]);
+        return itemClusters.includes(activeBaseTag);
+      });
     }
     if (activeSubTag) {
-      list = list.filter(item => item.tokens && item.tokens.includes(activeSubTag));
+      list = list.filter(item => {
+        if (!Array.isArray(item.tokens)) return false;
+        return item.tokens.some(tok => canonicalizeVocabTag(tok) === activeSubTag || tok === activeSubTag);
+      });
     }
     return list;
   }, [library, activeBaseTag, activeSubTag]);
@@ -257,15 +369,20 @@ export default function Home() {
         imageUrl: persistentImageDataUrl,
         summary: parsedDNA.summary,
         tokens: parsedDNA.tokens || [],
-        baseTags: parsedDNA.baseTags || ['Textured'],
-        recipe: parsedDNA.recipe
+        baseTags: parsedDNA.baseTags || ['Graphics'],
+        recipe: parsedDNA.recipe,
+        category: parsedDNA.category || 'Graphics'
       };
 
       await saveToCloudNative(newDnaItem);
       setSelectedItem(newDnaItem);
     } catch (error) {
       console.error("Upload Parsing Error: ", error);
-      setApiError(error);
+      setApiError({
+        title: "Image Analysis Error",
+        message: error.message || "Failed to parse image file.",
+        suggestion: "Ensure GEMINI_API_KEY is configured in Cloudflare or .env.local and retry."
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -284,49 +401,53 @@ export default function Home() {
     setApiError(null);
 
     try {
-      const { screenshotUrl, title } = await fetchUrlScreenshot(urlInput);
+      const { screenshotUrl, title, cleanUrl } = await fetchUrlScreenshot(urlInput);
       setUrlInput('');
 
-      let persistentImageUrl = screenshotUrl;
-      let base64Data = '';
-      let mimeType = 'image/png';
+      const existingItems = library.map(item => ({
+        creativeName: item.creativeName,
+        summary: item.summary,
+        tokens: item.tokens,
+        baseTags: item.baseTags
+      }));
 
-      try {
-        const res = await imageUrlToBase64(screenshotUrl);
-        base64Data = res.base64;
-        mimeType = res.mimeType || 'image/png';
-        const rawDataUrl = `data:${mimeType};base64,${base64Data}`;
-        persistentImageUrl = await compressImageDataUrl(rawDataUrl);
-      } catch (e) {
-        console.warn('Could not convert image to base64 data URL, storing CDN URL:', e);
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: screenshotUrl, existingItems })
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success || !data.dna) {
+        const errMsg = data.error || `Server HTTP ${response.status} Error`;
+        throw new Error(errMsg);
       }
 
-      if (!base64Data) {
-        throw {
-          title: "Screenshot Capture Error",
-          message: `Unable to capture image from ${urlInput}`,
-          suggestion: "Try uploading a direct screenshot image file instead."
-        };
-      }
-
-      const parsedDNA = await runDnaExtraction(base64Data, mimeType);
+      const parsedDNA = data.dna;
 
       const newDnaItem = {
         id: String(Date.now()),
         creativeName: parsedDNA.creativeName || title,
         uploadedAt: new Date(),
-        imageUrl: persistentImageUrl,
+        imageUrl: screenshotUrl,
+        sourceUrl: cleanUrl,
         summary: parsedDNA.summary,
         tokens: parsedDNA.tokens || [],
-        baseTags: parsedDNA.baseTags || ['SaaS/B2B'],
-        recipe: parsedDNA.recipe
+        baseTags: parsedDNA.baseTags || ['Website'],
+        recipe: parsedDNA.recipe,
+        category: parsedDNA.category || 'Website'
       };
 
       await saveToCloudNative(newDnaItem);
       setSelectedItem(newDnaItem);
     } catch (error) {
       console.error("URL Capture Error: ", error);
-      setApiError(error);
+      setApiError({
+        title: "URL Analysis Error",
+        message: error.message || "Failed to capture and analyze URL screenshot.",
+        suggestion: "Try uploading a direct screenshot image file instead."
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -340,13 +461,6 @@ export default function Home() {
       setActiveBaseTag(tag);
       setActiveSubTag(null);
     }
-  };
-
-  const handleCopyPrompt = (item) => {
-    const text = compileStitchPrompt(item, customSubject);
-    if (typeof navigator !== 'undefined') navigator.clipboard.writeText(text);
-    setCopiedType('prompt');
-    setTimeout(() => setCopiedType(null), 2500);
   };
 
   const executeBlend = () => {
@@ -416,11 +530,34 @@ export default function Home() {
       }
     });
   };
-
   const clearBlend = () => {
     setBlendSlotA(null);
     setBlendSlotB(null);
     setBlendedResult(null);
+  };
+
+  const [modalPromptMode, setModalPromptMode] = useState('standard');
+
+  const handleOpenOverdrive = (item) => {
+    setSelectedItem(item);
+    setModalPromptMode('overdrive');
+  };
+
+  const handleOpenImagePrompt = (item) => {
+    setSelectedItem(item);
+    setModalPromptMode('image');
+  };
+
+  const handleSelectItem = (item) => {
+    setSelectedItem(item);
+    setModalPromptMode('standard');
+  };
+
+  const handleCopyPrompt = (item, textOverride) => {
+    const text = textOverride || compileStitchPrompt(item, customSubject);
+    if (typeof navigator !== 'undefined') navigator.clipboard.writeText(text);
+    setCopiedType('prompt');
+    setTimeout(() => setCopiedType(null), 2500);
   };
 
   return (
@@ -439,7 +576,7 @@ export default function Home() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-slate-900 font-display tracking-tight">Drop Website Screenshot Here</h2>
-          <p className="text-sm text-indigo-700 mt-2 font-mono font-semibold">Deconstruct Design DNA automatically with Gemini 2.5 Flash</p>
+          <p className="text-sm text-indigo-700 mt-2 font-mono font-semibold">Deconstruct Design DNA automatically with Gemini Flash</p>
         </div>
       )}
 
@@ -450,6 +587,7 @@ export default function Home() {
           urlInput={urlInput}
           setUrlInput={setUrlInput}
           isProcessing={isProcessing}
+          onOpenBookmarklet={() => setIsBookmarkletOpen(true)}
         />
 
         <NoticeBanners
@@ -460,7 +598,7 @@ export default function Home() {
         <DailySpark
           dailySpark={dailySpark}
           generateNewSpark={generateNewSpark}
-          onApplySpark={onApplySpark}
+          isSparkLoading={isSparkLoading}
         />
 
         <TagFilterBar
@@ -476,7 +614,9 @@ export default function Home() {
         <DashboardGrid
           filteredLibrary={filteredLibrary}
           isProcessing={isProcessing}
-          setSelectedItem={setSelectedItem}
+          setSelectedItem={handleSelectItem}
+          setOpenOverdrive={handleOpenOverdrive}
+          setOpenImagePrompt={handleOpenImagePrompt}
           setBlendSlotA={setBlendSlotA}
           setBlendSlotB={setBlendSlotB}
         />
@@ -501,6 +641,12 @@ export default function Home() {
         handleCopyPrompt={handleCopyPrompt}
         copiedType={copiedType}
         setActiveSubTag={setActiveSubTag}
+        initialPromptMode={modalPromptMode}
+      />
+
+      <BookmarkletModal
+        isOpen={isBookmarkletOpen}
+        onClose={() => setIsBookmarkletOpen(false)}
       />
 
       <Footer />

@@ -32,3 +32,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# OS cruft
+.DS_Store
+
+# wrangler local state
+.wrangler/
+
+# local secrets
+.dev.vars
