@@ -32,6 +32,7 @@ const NAV = [
   { label: 'Shotcaller', href: 'https://shotcaller.fictiontribe.com' },
   { label: 'StitchBox', href: null },
   { label: 'Glyphforge', href: 'https://glyphforge.fictiontribe.com' },
+  { label: 'Scratcher', href: 'https://scratcher.fictiontribe.com' },
 ];
 
 export default function Footer() {
