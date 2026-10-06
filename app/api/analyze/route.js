@@ -1,26 +1,13 @@
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { generateContent, jsonOf } from '../../../lib/ft-ai.mjs';
+import { aiEnv } from '../../../lib/ai';
 
 export const runtime = 'edge';
 
 export async function POST(request) {
   try {
-    let apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.VERTEX_API_KEY;
-
-    try {
-      const ctx = getRequestContext();
-      if (ctx?.env?.GEMINI_API_KEY) {
-        apiKey = ctx.env.GEMINI_API_KEY;
-      } else if (ctx?.env?.VERTEX_API_KEY) {
-        apiKey = ctx.env.VERTEX_API_KEY;
-      }
-    } catch (e) {
-      // getRequestContext may throw when running outside Cloudflare edge worker environment
-    }
-
-    if (!apiKey) {
-      return Response.json({ 
-        error: "GEMINI_API_KEY environment variable is not configured. Please add GEMINI_API_KEY in Cloudflare Pages Settings -> Environment Variables/Secrets." 
-      }, { status: 500 });
+    const env = aiEnv();
+    if (!env) {
+      return Response.json({ error: "The FT_AI gateway binding is not configured for this deployment." }, { status: 500 });
     }
 
     const body = await request.json();
@@ -58,13 +45,6 @@ export async function POST(request) {
       return Response.json({ error: "Missing imageBase64 or imageUrl parameter." }, { status: 400 });
     }
 
-    // Alias-first model selection strategy to prevent breakage from model deprecations
-    const configuredModel = process.env.GEMINI_MODEL;
-    const candidateModels = [
-      ...(configuredModel ? [configuredModel.startsWith("models/") ? configuredModel : `models/${configuredModel}`] : []),
-      "models/gemini-flash-latest",
-      "models/gemini-flash-lite-latest"
-    ];
 
     // Format existing collection context if provided
     let collectionContext = "";
@@ -167,42 +147,13 @@ Generate output matching this exact JSON schema:
       }
     };
 
-    let lastError = null;
-    let parsedDNA = null;
-
-    for (const fullModelPath of candidateModels) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 18000);
-
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/${fullModelPath}:generateContent?key=${apiKey}`;
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(geminiPayload),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data = await response.json();
-          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawText) {
-            parsedDNA = JSON.parse(rawText);
-            break;
-          }
-        } else {
-          const errText = await response.text();
-          lastError = `${fullModelPath} returned HTTP ${response.status}: ${errText}`;
-        }
-      } catch (err) {
-        lastError = `${fullModelPath} call failed: ${err.message}`;
-      }
-    }
+    const result = await generateContent(env, 'text', geminiPayload);
+    let parsedDNA = result.status < 400 ? jsonOf(result.data) : null;
 
     if (!parsedDNA) {
-      return Response.json({ 
-        error: `Gemini API call failed (${candidateModels.join(', ')}). Last error: ${lastError}` 
+      console.error(`ft-ai ${result.status} [${result.model}]: ${JSON.stringify(result.data).slice(0, 500)}`);
+      return Response.json({
+        error: `Gemini via ft-ai failed (HTTP ${result.status}).`
       }, { status: 500 });
     }
 

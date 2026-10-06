@@ -1,37 +1,17 @@
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { generateContent, jsonOf } from '../../../lib/ft-ai.mjs';
+import { aiEnv } from '../../../lib/ai';
 
 export const runtime = 'edge';
 
 export async function POST(request) {
   try {
-    let apiKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.VERTEX_API_KEY;
-
-    try {
-      const ctx = getRequestContext();
-      if (ctx?.env?.GEMINI_API_KEY) {
-        apiKey = ctx.env.GEMINI_API_KEY;
-      } else if (ctx?.env?.VERTEX_API_KEY) {
-        apiKey = ctx.env.VERTEX_API_KEY;
-      }
-    } catch (e) {
-      // getRequestContext may throw when running outside Cloudflare edge worker environment
-    }
-
-    if (!apiKey) {
-      return Response.json({ 
-        error: "GEMINI_API_KEY environment variable is not configured." 
-      }, { status: 500 });
+    const env = aiEnv();
+    if (!env) {
+      return Response.json({ error: "The FT_AI gateway binding is not configured for this deployment." }, { status: 500 });
     }
 
     const body = await request.json().catch(() => ({}));
     const { previousSubjects = [] } = body;
-
-    const configuredModel = process.env.GEMINI_MODEL;
-    const candidateModels = [
-      ...(configuredModel ? [configuredModel.startsWith("models/") ? configuredModel : `models/${configuredModel}`] : []),
-      "models/gemini-flash-latest",
-      "models/gemini-flash-lite-latest"
-    ];
 
     const domains = [
       "astrobiology & exoplanet atmospheric research",
@@ -115,35 +95,16 @@ JSON Output Schema:
       }
     };
 
-    let lastError = null;
-    for (const model of candidateModels) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            const parsed = JSON.parse(text);
-            if (parsed && parsed.subject) {
-              return Response.json({ success: true, spark: parsed });
-            }
-          }
-        } else {
-          const errText = await res.text();
-          lastError = `Model ${model} returned HTTP ${res.status}: ${errText}`;
-        }
-      } catch (err) {
-        lastError = err.message;
-      }
+    const result = await generateContent(env, 'text', payload);
+    if (result.status >= 400) {
+      console.error(`ft-ai ${result.status}: ${JSON.stringify(result.data).slice(0, 500)}`);
+      return Response.json({ error: `Gemini via ft-ai returned HTTP ${result.status}` }, { status: 500 });
     }
-
-    return Response.json({ error: lastError || "Failed to generate spark via Gemini" }, { status: 500 });
+    const parsed = jsonOf(result.data);
+    if (parsed && parsed.subject) {
+      return Response.json({ success: true, spark: parsed });
+    }
+    return Response.json({ error: "Failed to generate spark via Gemini" }, { status: 500 });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }

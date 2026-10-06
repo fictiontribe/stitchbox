@@ -6,6 +6,9 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  // Gemini is reached through the shared ft-ai gateway (dev-projects/ft-ai) —
+  // no Gemini key or model name lives in this repo.
+  "services": [{ "binding": "FT_AI", "service": "ft-ai" }],
   "kv_namespaces": [
     {
       "binding": "STITCHBOX_KV",
